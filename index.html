@@ -6,8 +6,8 @@
   <title>Aplikasi Kasir iZZi Corner</title>
   
   <!-- Icon / Logo Aplikasi -->
-  <link rel="icon" type="image/jpeg" href="logo.jpg">
-  <link rel="apple-touch-icon" href="logo.jpg">
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -58,17 +58,17 @@
 
     // --- DATA WARUNG RESMI ---
     const STORE_INFO = {
-      name: "iZZi Corner",
+      name: "IZZI CORNER",
       slogan: "Fresh & Delicious",
       address: "Kantin Menara Samawa No. 3",
       whatsapp: "0838-7210-1212",
-      logo: "logo.jpg",
+      logo: "logo.png",
       onlinePlatforms: ["GrabFood", "GoFood", "ShopeeFood"]
     };
 
     const INITIAL_CATEGORIES = ["Semua", "Ayam & Nasi", "Seblak", "Minuman", "Cemilan"];
 
-    // Daftar Menu Resmi Terbaru
+    // Daftar Menu Resmi
     const INITIAL_MENU = [
       { id: 1, name: "Ayam Bakar", price: 15000, category: "Ayam & Nasi", icon: "🍗", desc: "Ayam bakar bumbu manis gurih" },
       { id: 2, name: "Ayam Penyet Cabe Ijo", price: 15000, category: "Ayam & Nasi", icon: "🌶️", desc: "Ayam penyet dengan sambal ijo mantap" },
@@ -127,7 +127,7 @@
       // Menu List dengan LocalStorage
       const [menuList, setMenuList] = useState(() => {
         try {
-          const savedMenu = localStorage.getItem('izzi_pos_menu_v4');
+          const savedMenu = localStorage.getItem('izzi_pos_menu_v6');
           return savedMenu ? JSON.parse(savedMenu) : INITIAL_MENU;
         } catch(e) {
           return INITIAL_MENU;
@@ -136,7 +136,7 @@
 
       useEffect(() => {
         try {
-          localStorage.setItem('izzi_pos_menu_v4', JSON.stringify(menuList));
+          localStorage.setItem('izzi_pos_menu_v6', JSON.stringify(menuList));
         } catch(e){}
       }, [menuList]);
 
@@ -145,8 +145,9 @@
       const [editMenuName, setEditMenuName] = useState("");
       const [editMenuPrice, setEditMenuPrice] = useState("");
 
-      // Delivery Option State ('loby' = Rp 0, 'unit' = Rp 2000)
+      // Delivery Option State ('loby' = Rp 0, 'unit' = Rp 2000) & Detail Lokasi/Unit
       const [deliveryOption, setDeliveryOption] = useState('loby');
+      const [unitDetail, setUnitDetail] = useState('');
       const deliveryFee = deliveryOption === 'unit' ? 2000 : 0;
 
       // Custom Item Modal State
@@ -172,14 +173,17 @@
       const [currentTransaction, setCurrentTransaction] = useState(null);
       const [btDevice, setBtDevice] = useState(null);
       const [btConnected, setBtConnected] = useState(false);
-      const [btStatusText, setBtStatusText] = useState("Printer Terputus");
+      const [btStatusText, setBtStatusText] = useState("BT Printer");
       const [printerDeviceName, setPrinterDeviceName] = useState("");
       const [isPrinting, setIsPrinting] = useState(false);
+
+      // Ref Penanganan Reconnect Otomatis Bluetooth
+      const btDeviceRef = useRef(null);
 
       // Data raster logo thermal
       const [logoRasterCmds, setLogoRasterCmds] = useState(null);
 
-      // Pre-load & Render Logo ke Command Raster ESC/POS
+      // Pre-load & Render logo.png ke Command Raster ESC/POS
       useEffect(() => {
         const img = new Image();
         img.crossOrigin = "Anonymous";
@@ -190,14 +194,12 @@
             if (!canvas) return;
             const ctx = canvas.getContext("2d");
             
-            // Ukuran ideal logo printer 58mm (384 titik lebar)
-            const targetWidth = 384;
+            const targetWidth = 384; // 58mm titik cetak
             const scale = targetWidth / img.width;
             const targetHeight = Math.floor(img.height * scale);
             canvas.width = targetWidth;
             canvas.height = targetHeight;
 
-            // Gambar latar putih & logo
             ctx.fillStyle = "#FFFFFF";
             ctx.fillRect(0, 0, targetWidth, targetHeight);
             ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
@@ -205,7 +207,6 @@
             const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
             const pixels = imgData.data;
 
-            // Buat Command GS v 0 (Raster bit image ESC/POS)
             const widthBytes = Math.ceil(targetWidth / 8);
             const commands = [];
             
@@ -221,9 +222,8 @@
                   const x = xByte * 8 + bit;
                   if (x < targetWidth) {
                     const idx = (y * targetWidth + x) * 4;
-                    // Formula Grayscale
                     const brightness = (pixels[idx] * 0.299) + (pixels[idx + 1] * 0.587) + (pixels[idx + 2] * 0.114);
-                    if (brightness < 160) { // Threshold hitam
+                    if (brightness < 160) {
                       byteVal |= (0x80 >> bit);
                     }
                   }
@@ -233,7 +233,7 @@
             }
             setLogoRasterCmds(commands);
           } catch(e) {
-            console.error("Gagal memproses raster logo thermal:", e);
+            console.error("Gagal memproses raster logo.png:", e);
           }
         };
       }, []);
@@ -278,7 +278,6 @@
         });
       };
 
-      // Edit Harga Item Dalam Keranjang
       const openEditCartPrice = (item) => {
         setEditingCartItem(item);
         setCartEditPrice(item.price.toString());
@@ -296,7 +295,6 @@
         setEditingCartItem(null);
       };
 
-      // Tambah Menu Custom Baru
       const handleAddCustomMenu = (e) => {
         e.preventDefault();
         if (!customName.trim() || !customPrice || isNaN(customPrice) || parseFloat(customPrice) <= 0) {
@@ -335,7 +333,6 @@
         setShowAddMenuModal(false);
       };
 
-      // Edit Harga Katalog
       const openEditMenuItem = (item) => {
         setEditingMenuItem(item);
         setEditMenuName(item.name);
@@ -386,7 +383,6 @@
 
       const clearCart = () => setCart([]);
 
-      // Flow Pembayaran
       const handleOpenPayment = () => {
         if (cart.length === 0) return;
         setCashPaid(cartTotal.toString());
@@ -402,14 +398,17 @@
           return;
         }
 
+        const now = new Date();
+        const formattedDate = `${now.getDate()} ${now.toLocaleString('id-ID', { month: 'short' })} ${now.getFullYear()}, ${now.getHours().toString().padStart(2, '0')}.${now.getMinutes().toString().padStart(2, '0')}`;
+
         const newTx = {
           id: "IZZI-" + Date.now().toString().slice(-6),
-          date: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
-          rawDate: new Date().toISOString(),
+          date: formattedDate,
           items: [...cart],
           itemsSubtotal: itemsSubtotal,
           deliveryFee: deliveryFee,
           deliveryOption: deliveryOption,
+          unitDetail: unitDetail.trim(),
           total: cartTotal,
           paymentMethod: paymentMethod,
           paid: paymentMethod === "Tunai" ? numericPaid : cartTotal,
@@ -421,12 +420,35 @@
         setShowPaymentModal(false);
         setCart([]);
 
-        // Otomatis cetak thermal jika sudah tersambung
         if (autoPrintEnabled && btConnected) {
           printReceiptThermal(newTx);
         }
         
         setShowReceiptModal(true);
+      };
+
+      // FUNGSI AUTO-RECONNECT DAN LISTEN PENYAMBUNGAN PRINTER BLUETOOTH
+      const handleDisconnected = (event) => {
+        const device = event.target;
+        console.log(`Printer Bluetooth ${device.name} terputus. Mencoba reconnect otomatis...`);
+        setBtConnected(false);
+        setBtStatusText("Menghubungkan...");
+
+        // Usaha menyambung kembali secara berkala jika printer masih hidup
+        setTimeout(() => {
+          if (device && device.gatt) {
+            device.gatt.connect()
+              .then(() => {
+                console.log("Auto-reconnect printer berhasil!");
+                setBtConnected(true);
+                setBtStatusText(device.name || "Printer 58mm");
+              })
+              .catch(err => {
+                console.log("Gagal auto-reconnect:", err);
+                setBtStatusText("BT Terputus");
+              });
+          }
+        }, 2000);
       };
 
       // KONEKSI BLUETOOTH PRINTER THERMAL 58mm
@@ -437,7 +459,7 @@
             return;
           }
           
-          setBtStatusText("Mencari Printer...");
+          setBtStatusText("Mencari...");
           const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
             optionalServices: [
@@ -448,14 +470,20 @@
             ]
           });
 
+          // Tambahkan listener saat terputus agar otomatis reconnect saat printer dihidupkan
+          device.addEventListener('gattserverdisconnected', handleDisconnected);
+
+          await device.gatt.connect();
+
+          btDeviceRef.current = device;
           setPrinterDeviceName(device.name || "Printer Thermal 58mm");
           setBtDevice(device);
           setBtConnected(true);
-          setBtStatusText(`Terhubung: ${device.name || "Printer 58mm"}`);
-          showAlert("Printer Terhubung", `Berhasil tersambung ke printer: ${device.name || "Thermal Printer 58mm"}`);
+          setBtStatusText(device.name || "Printer 58mm");
+          showAlert("Printer Terhubung", `Berhasil tersambung ke printer: ${device.name || "Thermal Printer 58mm"}\n\nKoneksi akan tetap dijaga otomatis saat printer dalam keadaan hidup.`);
         } catch (error) {
           console.error("BT Error:", error);
-          setBtStatusText("Printer Terputus");
+          setBtStatusText("BT Printer");
           setBtConnected(false);
         }
       };
@@ -474,18 +502,18 @@
         const addText = (str) => commands.push(...encoder.encode(str + "\n"));
         const addCmd = (cmdArr) => commands.push(...cmdArr);
 
-        // Init Printer
+        // Reset Printer
         addCmd([0x1B, 0x40]); 
         
-        // CETAK RASTER LOGO JIKA TERSEDIA
+        // Raster Logo jika ada
         if (logoRasterCmds && logoRasterCmds.length > 0) {
-          addCmd([0x1B, 0x61, 0x01]); // Center
+          addCmd([0x1B, 0x61, 0x01]);
           addCmd(logoRasterCmds);
           addText(""); 
         }
 
-        // Header Center
-        addCmd([0x1B, 0x61, 0x01]);
+        // Header Center Sesuai Gambar
+        addCmd([0x1B, 0x61, 0x01]); // Center Align
         addCmd([0x1B, 0x45, 0x01]); // Bold ON
         addText(STORE_INFO.name.toUpperCase());
         addCmd([0x1B, 0x45, 0x00]); // Bold OFF
@@ -499,58 +527,75 @@
         addText(`No : ${tx.id}`);
         addText(`Tgl: ${tx.date}`);
         addText(`Bayar: ${tx.paymentMethod}`);
+        if (tx.unitDetail) {
+          addText(`Lokasi: ${tx.unitDetail}`);
+        }
         addText("--------------------------------");
 
-        // Daftar Item
+        // Daftar Item Sesuai Format Gambar
         tx.items.forEach(item => {
           addText(item.name);
           if (item.note) addText(`  * ${item.note}`);
           const qtyPrice = `${item.qty} x ${item.price.toLocaleString('id-ID')}`;
-          const totalItem = (item.qty * item.price).toLocaleString('id-ID');
-          addText(format58mmLine(` ${qtyPrice}`, totalItem));
+          const totalItem = `Rp ${(item.qty * item.price).toLocaleString('id-ID')}`;
+          addText(format58mmLine(qtyPrice, totalItem));
         });
 
         addText("--------------------------------");
-        if (tx.deliveryFee > 0) {
-          addText(format58mmLine("Subtotal Pesanan:", `Rp ${(tx.itemsSubtotal || tx.total - tx.deliveryFee).toLocaleString('id-ID')}`));
-          addText(format58mmLine("Ongkir Delivery Unit:", `Rp ${tx.deliveryFee.toLocaleString('id-ID')}`));
-        } else {
-          addText(format58mmLine("Ongkir (Loby/Sec):", "GRATIS"));
+
+        // Ongkir & Lokasi Unit
+        let ongkirText = tx.deliveryFee > 0 ? `Rp ${tx.deliveryFee.toLocaleString('id-ID')}` : "GRATIS (Loby/Sec)";
+        if (tx.deliveryOption === 'unit' && tx.unitDetail) {
+          ongkirText += ` (${tx.unitDetail})`;
         }
-        addText(format58mmLine("TOTAL TAGIHAN:", `Rp ${tx.total.toLocaleString('id-ID')}`));
-        
+        addText(format58mmLine("Ongkir:", ongkirText));
+
+        // Total
+        addCmd([0x1B, 0x45, 0x01]); // Bold ON
+        addText(format58mmLine("Total:", `Rp ${tx.total.toLocaleString('id-ID')}`));
+        addCmd([0x1B, 0x45, 0x00]); // Bold OFF
+
         if (tx.paymentMethod === "Tunai") {
-          addText(format58mmLine("Uang Tunai:", `Rp ${tx.paid.toLocaleString('id-ID')}`));
-          addText(format58mmLine("Kembalian:", `Rp ${tx.change.toLocaleString('id-ID')}`));
+          addText(format58mmLine("Tunai:", `Rp ${tx.paid.toLocaleString('id-ID')}`));
+          addText(format58mmLine("Kembali:", `Rp ${tx.change.toLocaleString('id-ID')}`));
         }
         addText("--------------------------------");
 
         // Footer Center
         addCmd([0x1B, 0x61, 0x01]);
-        addText("Terima Kasih Atas Kunjungannya!");
+        addText("Terima Kasih!");
         addText("Fresh & Delicious Everyday");
-        addText("Delivery: WA / Samawa No. 3");
-        addText("Available on: Grab/Go/ShopeeFood");
         addText("\n\n\n");
 
         return new Uint8Array(commands);
       };
 
-      // FUNGSI KHUSUS CETAK THERMAL BLUETOOTH 58mm
       const printReceiptThermal = async (tx = currentTransaction) => {
         if (!tx) return;
 
-        if (!btDevice || !btConnected) {
+        let activeDev = btDevice || btDeviceRef.current;
+
+        // Coba koneksikan jika sebelumnya disconnect
+        if (activeDev && !activeDev.gatt.connected) {
+          try {
+            await activeDev.gatt.connect();
+            setBtConnected(true);
+          } catch(e) {
+            console.log("Re-connect gagal saat akan mencetak:", e);
+          }
+        }
+
+        if (!activeDev || !activeDev.gatt.connected) {
           showAlert(
             "Printer Belum Terhubung", 
-            "Aplikasi ini disetting KHUSUS cetak ke Printer Bluetooth Thermal 58mm.\n\nSilakan sambungkan printer Bluetooth Anda di menu Pengaturan atau pada tombol 'BT Printer' di pojok kanan atas."
+            "Cetak struk disetting khusus menggunakan Printer Bluetooth Thermal 58mm.\n\nKlik tombol 'BT Printer' di kanan atas untuk menyambungkan."
           );
           return;
         }
 
         setIsPrinting(true);
         try {
-          const server = await btDevice.gatt.connect();
+          const server = activeDev.gatt.connected ? activeDev.gatt : await activeDev.gatt.connect();
           const services = await server.getPrimaryServices();
           
           if (services.length > 0) {
@@ -582,13 +627,12 @@
           throw new Error("Layanan Bluetooth Printer tidak ditemukan.");
         } catch (e) {
           console.error("Print Thermal Error:", e);
-          showAlert("Gagal Cetak Thermal", "Gagal mengirim data ke Printer Bluetooth. Pastikan printer dinyalakan, kertas terpasang, dan Bluetooth HP aktif.");
+          showAlert("Gagal Cetak Thermal", "Gagal mengirim data ke Printer Bluetooth. Pastikan printer dalam keadaan hidup dan Bluetooth HP aktif.");
         } finally {
           setIsPrinting(false);
         }
       };
 
-      // Kirim Struk WA
       const sendWhatsAppReceipt = (tx) => {
         if (!tx) return;
         let text = `*-- STRUK PEMBAYARAN ${STORE_INFO.name.toUpperCase()} --*\n`;
@@ -598,37 +642,33 @@
         text += `No. Transaksi: ${tx.id}\n`;
         text += `Tanggal: ${tx.date}\n`;
         text += `Metode: ${tx.paymentMethod}\n`;
+        if (tx.unitDetail) {
+          text += `Lokasi / Unit: ${tx.unitDetail}\n`;
+        }
         text += `-----------------------------------\n`;
         tx.items.forEach(i => {
-          text += `• ${i.name} (${i.qty}x)\n  Rp ${(i.qty * i.price).toLocaleString('id-ID')}\n`;
+          text += `• ${i.name}\n  ${i.qty} x ${i.price.toLocaleString('id-ID')} = Rp ${(i.qty * i.price).toLocaleString('id-ID')}\n`;
           if (i.note) text += `  Catatan: ${i.note}\n`;
         });
         text += `-----------------------------------\n`;
-        if (tx.deliveryFee > 0) {
-          text += `Subtotal: Rp ${(tx.itemsSubtotal || tx.total - tx.deliveryFee).toLocaleString('id-ID')}\n`;
-          text += `Ongkir Unit: Rp ${tx.deliveryFee.toLocaleString('id-ID')}\n`;
-        } else {
-          text += `Ongkir: GRATIS (Loby/Security)\n`;
-        }
-        text += `*TOTAL: Rp ${tx.total.toLocaleString('id-ID')}*\n`;
+        text += `Ongkir: ${tx.deliveryFee > 0 ? `Rp ${tx.deliveryFee.toLocaleString('id-ID')}` : 'GRATIS (Loby/Sec)'}\n`;
+        text += `*Total: Rp ${tx.total.toLocaleString('id-ID')}*\n`;
         if (tx.paymentMethod === "Tunai") {
-          text += `Bayar: Rp ${tx.paid.toLocaleString('id-ID')}\n`;
+          text += `Tunai: Rp ${tx.paid.toLocaleString('id-ID')}\n`;
           text += `Kembali: Rp ${tx.change.toLocaleString('id-ID')}\n`;
         }
         text += `-----------------------------------\n`;
-        text += `Terima Kasih! ~ ${STORE_INFO.slogan}`;
+        text += `Terima Kasih!\n${STORE_INFO.slogan}`;
 
         const encoded = encodeURIComponent(text);
         window.open(`https://wa.me/?text=${encoded}`, '_blank');
       };
 
-      // Kalkulasi Laporan Penjualan
       const reportStats = useMemo(() => {
         const totalRev = history.reduce((acc, curr) => acc + curr.total, 0);
         const totalTx = history.length;
         const avgTx = totalTx > 0 ? totalRev / totalTx : 0;
 
-        // Hitung Item Terlaris
         const itemCounts = {};
         history.forEach(tx => {
           tx.items.forEach(it => {
@@ -686,7 +726,7 @@
                 }`}
               >
                 <span className={`w-2 h-2 rounded-full ${btConnected ? 'bg-white animate-pulse' : 'bg-red-500'}`}></span>
-                <span className="text-[10px]">{btConnected ? "Printer" : "BT Printer"}</span>
+                <span className="text-[10px] font-bold">{btStatusText}</span>
               </button>
             </div>
           </header>
@@ -833,8 +873,8 @@
                       ))}
                     </div>
 
-                    {/* PILIHAN DELIVERY ONGKIR */}
-                    <div className="pt-2 border-t space-y-1.5">
+                    {/* PILIHAN DELIVERY ONGKIR & INPUT UNIT */}
+                    <div className="pt-2 border-t space-y-2">
                       <label className="text-[11px] font-bold text-gray-700 block">Lokasi Pengantaran:</label>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <button
@@ -862,6 +902,17 @@
                           <div className="font-bold">🛵 Delivery ke Unit</div>
                           <div className="text-[10px] opacity-80">+Rp 2.000 / Order</div>
                         </button>
+                      </div>
+
+                      {/* KOLOM INPUT TULIS UNIT / LOKASI */}
+                      <div>
+                        <input
+                          type="text"
+                          placeholder={deliveryOption === 'unit' ? "Tulis nomor unit (contoh: Unit 12A / Lantai 5)" : "Detail lokasi (opsional, contoh: Loby Utama)"}
+                          value={unitDetail}
+                          onChange={(e) => setUnitDetail(e.target.value)}
+                          className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
+                        />
                       </div>
                     </div>
 
@@ -916,6 +967,7 @@
                           <div>
                             <span className="font-bold text-gray-800 text-xs">{tx.id}</span>
                             <p className="text-[10px] text-gray-500">{tx.date}</p>
+                            {tx.unitDetail && <p className="text-[10px] text-brand-blue font-bold">📍 {tx.unitDetail}</p>}
                           </div>
                           <span className="bg-blue-100 text-brand-blue text-[10px] font-bold px-2 py-0.5 rounded-full">
                             {tx.paymentMethod}
@@ -1012,7 +1064,7 @@
                     <span>🖨️ Printer Thermal Bluetooth 58mm</span>
                   </h3>
                   <div className="bg-gray-50 p-2 rounded-lg border text-[11px] space-y-0.5">
-                    <p className="text-gray-600">Status: <strong className={btConnected ? "text-emerald-600" : "text-red-500"}>{btStatusText}</strong></p>
+                    <p className="text-gray-600">Status: <strong className={btConnected ? "text-emerald-600" : "text-red-500"}>{btConnected ? "Terhubung (Auto-Reconnect Aktif)" : "Terputus"}</strong></p>
                     {printerDeviceName && <p className="text-gray-600">Perangkat: <strong>{printerDeviceName}</strong></p>}
                   </div>
 
@@ -1352,7 +1404,7 @@
             </div>
           )}
 
-          {/* MODAL STRUK SUKSES & CETAK BLUETOOTH THERMAL */}
+          {/* MODAL STRUK SUKSES SESUAI DESAIN GAMBAR + LOGO */}
           {showReceiptModal && currentTransaction && (
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
               <div className="bg-white w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto shadow-2xl">
@@ -1365,35 +1417,38 @@
                   <p className="text-[11px] text-gray-500">Kode: {currentTransaction.id}</p>
                 </div>
 
-                {/* PRATINJAU STRUK 58mm */}
+                {/* PRATINJAU STRUK EXACT DENGAN LOGO GAMBAR */}
                 <div 
-                  className="bg-yellow-50/50 border border-dashed border-gray-300 p-3 rounded-xl receipt-font text-xs space-y-1.5 text-gray-800 shadow-inner"
+                  className="bg-[#FFFFF5] border border-dashed border-gray-300 p-3.5 rounded-xl receipt-font text-xs space-y-1.5 text-gray-800 shadow-inner"
                 >
-                  <div className="text-center border-b border-dashed border-gray-400 pb-2">
+                  <div className="text-center pb-2 border-b border-dashed border-gray-400 space-y-1">
                     <img 
                       src={STORE_INFO.logo} 
                       alt="Logo iZZi Corner" 
-                      className="w-16 h-16 mx-auto mb-1 object-contain rounded-full border border-gray-300"
+                      className="w-16 h-16 mx-auto object-contain rounded-full bg-yellow-300 p-0.5 border border-gray-300"
                       onError={(e) => e.target.style.display = 'none'}
                     />
-                    <p className="font-bold text-xs">{STORE_INFO.name.toUpperCase()}</p>
-                    <p className="text-[10px]">{STORE_INFO.slogan}</p>
+                    <p className="font-bold text-xs tracking-wider">{STORE_INFO.name}</p>
+                    <p className="text-[10px] text-gray-700">{STORE_INFO.slogan}</p>
                     <p className="text-[9px] text-gray-600">{STORE_INFO.address}</p>
                     <p className="text-[9px] text-gray-600">WA: {STORE_INFO.whatsapp}</p>
                   </div>
 
-                  <div className="text-[10px] border-b border-dashed border-gray-400 pb-1">
+                  <div className="text-[10px] border-b border-dashed border-gray-400 pb-1.5 pt-0.5 space-y-0.5">
                     <p>No : {currentTransaction.id}</p>
                     <p>Tgl: {currentTransaction.date}</p>
                     <p>Bayar: {currentTransaction.paymentMethod}</p>
+                    {currentTransaction.unitDetail && (
+                      <p className="font-bold text-brand-blue">Lokasi: {currentTransaction.unitDetail}</p>
+                    )}
                   </div>
 
-                  <div className="space-y-1 text-[10px] border-b border-dashed border-gray-400 pb-2">
+                  <div className="space-y-1 text-[10px] border-b border-dashed border-gray-400 pb-2 pt-0.5">
                     {currentTransaction.items.map((it, idx) => (
-                      <div key={idx}>
-                        <p className="font-bold">{it.name}</p>
+                      <div key={idx} className="space-y-0.5">
+                        <p className="font-bold text-gray-900">{it.name}</p>
                         {it.note && <p className="text-[9px] text-gray-500 pl-2">* {it.note}</p>}
-                        <div className="flex justify-between text-[9px]">
+                        <div className="flex justify-between text-[9.5px]">
                           <span>{it.qty} x {it.price.toLocaleString('id-ID')}</span>
                           <span>Rp {(it.qty * it.price).toLocaleString('id-ID')}</span>
                         </div>
@@ -1401,37 +1456,28 @@
                     ))}
                   </div>
 
-                  <div className="space-y-0.5 text-[10px] font-bold border-b border-dashed border-gray-400 pb-2">
-                    {currentTransaction.deliveryFee > 0 ? (
-                      <>
-                        <div className="flex justify-between text-[9px] font-normal">
-                          <span>Subtotal Item:</span>
-                          <span>Rp {(currentTransaction.itemsSubtotal || currentTransaction.total - currentTransaction.deliveryFee).toLocaleString('id-ID')}</span>
-                        </div>
-                        <div className="flex justify-between text-[9px] text-emerald-700">
-                          <span>Ongkir Delivery Unit:</span>
-                          <span>Rp {currentTransaction.deliveryFee.toLocaleString('id-ID')}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex justify-between text-[9px] font-normal text-gray-600">
-                        <span>Ongkir:</span>
-                        <span>GRATIS (Loby/Sec)</span>
-                      </div>
-                    )}
+                  <div className="space-y-1 text-[10px] border-b border-dashed border-gray-400 pb-2 pt-0.5">
+                    <div className="flex justify-between text-[9.5px]">
+                      <span>Ongkir:</span>
+                      <span>
+                        {currentTransaction.deliveryFee > 0 
+                          ? `Rp ${currentTransaction.deliveryFee.toLocaleString('id-ID')}${currentTransaction.unitDetail ? ` (${currentTransaction.unitDetail})` : ''}` 
+                          : 'GRATIS (Loby/Sec)'}
+                      </span>
+                    </div>
 
-                    <div className="flex justify-between font-extrabold pt-0.5">
+                    <div className="flex justify-between font-bold text-xs text-gray-900 pt-0.5">
                       <span>Total:</span>
                       <span>Rp {currentTransaction.total.toLocaleString('id-ID')}</span>
                     </div>
 
                     {currentTransaction.paymentMethod === "Tunai" && (
                       <>
-                        <div className="flex justify-between text-[9px] font-normal">
+                        <div className="flex justify-between text-[9.5px] text-gray-700">
                           <span>Tunai:</span>
                           <span>Rp {currentTransaction.paid.toLocaleString('id-ID')}</span>
                         </div>
-                        <div className="flex justify-between text-[9px] font-normal">
+                        <div className="flex justify-between text-[9.5px] text-gray-700">
                           <span>Kembali:</span>
                           <span>Rp {currentTransaction.change.toLocaleString('id-ID')}</span>
                         </div>
@@ -1439,13 +1485,13 @@
                     )}
                   </div>
 
-                  <div className="text-center text-[9px] text-gray-600 pt-0.5">
+                  <div className="text-center text-[9.5px] text-gray-700 pt-1 space-y-0.5">
                     <p className="font-bold">Terima Kasih!</p>
-                    <p>Fresh & Delicious Everyday</p>
+                    <p>{STORE_INFO.slogan}</p>
                   </div>
                 </div>
 
-                {/* PILIHAN CETAK BLUETOOTH THERMAL KHUSUS */}
+                {/* TOMBOL AKSI CETAK / STRUK */}
                 <div className="space-y-1.5 pt-1">
                   <button
                     onClick={() => printReceiptThermal(currentTransaction)}
@@ -1457,14 +1503,14 @@
 
                   <button
                     onClick={() => sendWhatsAppReceipt(currentTransaction)}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-2 shadow transition"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center space-x-2 shadow transition"
                   >
                     <span>💬 Kirim Struk via WhatsApp</span>
                   </button>
 
                   <button
                     onClick={() => setShowReceiptModal(false)}
-                    className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-xl text-xs transition"
+                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 rounded-xl text-xs transition"
                   >
                     ⚡ Transaksi Baru (Selesai)
                   </button>
