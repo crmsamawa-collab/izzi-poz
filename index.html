@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aplikasi Kasir iZZi Corner - Fresh & Delicious</title>
+  <title>Aplikasi Kasir iZZi Corner</title>
   
   <!-- Icon / Logo Aplikasi -->
-  <link rel="icon" type="image/jpeg" href="logo.png">
-  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="icon" type="image/jpeg" href="logo.jpg">
+  <link rel="apple-touch-icon" href="logo.jpg">
   
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -17,11 +18,9 @@
           colors: {
             brand: {
               yellow: '#FFDE00',
-              yellowDark: '#E6C800',
               blue: '#0070BB',
               blueDark: '#005599',
-              red: '#E53E3E',
-              darkBg: '#0f172a'
+              red: '#E53E3E'
             }
           }
         }
@@ -29,9 +28,10 @@
     }
   </script>
   
-  <!-- React & Babel CDNs -->
+  <!-- React & ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
   <!-- Inter Font -->
@@ -41,91 +41,34 @@
     body { 
       font-family: 'Inter', sans-serif; 
       background-color: #0f172a; 
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
     }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .receipt-font { font-family: 'Courier New', Courier, monospace; }
-
-    /* Media styles for thermal paper printing */
-    @media print {
-      body * {
-        visibility: hidden;
-      }
-      #printable-receipt, #printable-receipt * {
-        visibility: visible;
-      }
-      #printable-receipt {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        margin: 0;
-        padding: 10px;
-        background: white;
-        color: black;
-        font-size: 12px;
-      }
-      #printable-receipt img {
-        max-width: 80px;
-        height: auto;
-        display: block;
-        margin: 0 auto 8px auto;
-        filter: grayscale(100%);
-      }
-    }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-0 sm:p-3">
-  <!-- Container utama aplikasi -->
   <div id="root" class="w-full max-w-md h-screen sm:h-[92vh] flex flex-col bg-white overflow-hidden shadow-2xl sm:rounded-2xl relative"></div>
 
+  <!-- Canvas Tersembunyi untuk Konversi Bitmap Logo Thermal -->
+  <canvas id="logo-thermal-canvas" width="384" height="120" style="display:none;"></canvas>
+
   <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useRef } = React;
 
-    const playSound = (type = 'click') => {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        if (type === 'click') {
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(800, ctx.currentTime);
-          osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.05);
-          gain.gain.setValueAtTime(0.15, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.05);
-        } else if (type === 'success') {
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-          osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.08);
-          osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.16);
-          gain.gain.setValueAtTime(0.2, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.3);
-        }
-      } catch (e) {}
-    };
-
+    // --- DATA WARUNG RESMI ---
     const STORE_INFO = {
       name: "iZZi Corner",
       slogan: "Fresh & Delicious",
       address: "Kantin Menara Samawa No. 3",
       whatsapp: "0838-7210-1212",
-      logo: "logo.png",
+      logo: "logo.jpg",
       onlinePlatforms: ["GrabFood", "GoFood", "ShopeeFood"]
     };
 
     const INITIAL_CATEGORIES = ["Semua", "Ayam & Nasi", "Seblak", "Minuman", "Cemilan"];
 
-    // Daftar Menu Resmi iZZi Corner
+    // Daftar Menu Resmi Terbaru
     const INITIAL_MENU = [
       { id: 1, name: "Ayam Bakar", price: 15000, category: "Ayam & Nasi", icon: "🍗", desc: "Ayam bakar bumbu manis gurih" },
       { id: 2, name: "Ayam Penyet Cabe Ijo", price: 15000, category: "Ayam & Nasi", icon: "🌶️", desc: "Ayam penyet dengan sambal ijo mantap" },
@@ -153,98 +96,14 @@
       { id: 21, name: "Peyek Kacang / Rebon", price: 7000, category: "Cemilan", icon: "🍘", desc: "Peyek garing gurih aneka rasa" }
     ];
 
-    // Logo Component SVG / Image Fallback
-    const BrandLogo = ({ className = "w-10 h-10", showBorder = true }) => (
-      <div className={`relative flex items-center justify-center rounded-xl bg-gradient-to-br from-yellow-300 to-yellow-500 overflow-hidden shadow-sm shrink-0 ${showBorder ? 'border border-yellow-600/30' : ''} ${className}`}>
-        <img 
-          src={STORE_INFO.logo} 
-          alt="iZZi Corner Logo" 
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            e.target.style.display = 'none';
-            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-          }}
-        />
-        <div className="hidden w-full h-full flex-col items-center justify-center bg-brand-yellow p-1 text-center">
-          <div className="flex items-center space-x-0.5">
-            <span className="font-black text-black text-xs tracking-tighter leading-none">IZZI</span>
-            <span className="text-red-600 text-xs font-bold">🔥</span>
-          </div>
-          <span className="font-extrabold text-black text-[8px] tracking-tight leading-none uppercase">CORNER</span>
-        </div>
-      </div>
-    );
-
-    const getLogoRasterEscPos = () => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.src = STORE_INFO.logo;
-        img.onload = () => {
-          try {
-            const canvas = document.createElement("canvas");
-            const targetWidth = 160; // 160 px wide logo for 58mm printer
-            const scale = targetWidth / img.width;
-            const targetHeight = Math.round(img.height * scale);
-
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-            const ctx = canvas.getContext("2d");
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, targetWidth, targetHeight);
-            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-            const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-            const widthBytes = Math.ceil(targetWidth / 8);
-            const rasterData = [];
-
-            // ESC/POS GS v 0 command header
-            // 0x1D, 0x76, 0x30, mode (0), xL, xH, yL, yH
-            const xL = widthBytes % 256;
-            const xH = Math.floor(widthBytes / 256);
-            const yL = targetHeight % 256;
-            const yH = Math.floor(targetHeight / 256);
-
-            rasterData.push(0x1D, 0x76, 0x30, 0, xL, xH, yL, yH);
-
-            for (let y = 0; y < targetHeight; y++) {
-              for (let b = 0; b < widthBytes; b++) {
-                let byteVal = 0;
-                for (let bit = 0; bit < 8; bit++) {
-                  const x = b * 8 + bit;
-                  if (x < targetWidth) {
-                    const idx = (y * targetWidth + x) * 4;
-                    const r = imgData.data[idx];
-                    const g = imgData.data[idx + 1];
-                    const bVal = imgData.data[idx + 2];
-                    const brightness = (r * 0.299 + g * 0.587 + bVal * 0.114);
-                    // Dark pixel = 1
-                    if (brightness < 128) {
-                      byteVal |= (1 << (7 - bit));
-                    }
-                  }
-                }
-                rasterData.push(byteVal);
-              }
-            }
-            resolve(new Uint8Array(rasterData));
-          } catch (e) {
-            resolve(null);
-          }
-        };
-        img.onerror = () => resolve(null);
-      });
-    };
-
     function App() {
-      // Navigation state: 'kasir' | 'riwayat' | 'analisis' | 'pengaturan'
-      const [activeTab, setActiveTab] = useState('kasir'); 
+      // States Utama
+      const [activeTab, setActiveTab] = useState('kasir'); // 'kasir' | 'riwayat' | 'laporan' | 'pengaturan'
       const [cart, setCart] = useState([]);
       const [selectedCategory, setSelectedCategory] = useState("Semua");
       const [searchTerm, setSearchTerm] = useState("");
-      const [soundEnabled, setSoundEnabled] = useState(true);
 
-      // Custom Alert / Confirm Modal State
+      // Custom Alert Modal State
       const [customAlert, setCustomAlert] = useState({
         show: false,
         title: "",
@@ -265,10 +124,10 @@
         setCustomAlert(prev => ({ ...prev, show: false }));
       };
 
-      // Menu List dengan LocalStorage persistence
+      // Menu List dengan LocalStorage
       const [menuList, setMenuList] = useState(() => {
         try {
-          const savedMenu = localStorage.getItem('izzi_pos_menu_v5');
+          const savedMenu = localStorage.getItem('izzi_pos_menu_v4');
           return savedMenu ? JSON.parse(savedMenu) : INITIAL_MENU;
         } catch(e) {
           return INITIAL_MENU;
@@ -277,26 +136,30 @@
 
       useEffect(() => {
         try {
-          localStorage.setItem('izzi_pos_menu_v5', JSON.stringify(menuList));
+          localStorage.setItem('izzi_pos_menu_v4', JSON.stringify(menuList));
         } catch(e){}
       }, [menuList]);
+
+      // State Edit Harga Menu Catalog
+      const [editingMenuItem, setEditingMenuItem] = useState(null);
+      const [editMenuName, setEditMenuName] = useState("");
+      const [editMenuPrice, setEditMenuPrice] = useState("");
 
       // Delivery Option State ('loby' = Rp 0, 'unit' = Rp 2000)
       const [deliveryOption, setDeliveryOption] = useState('loby');
       const deliveryFee = deliveryOption === 'unit' ? 2000 : 0;
 
-      // Custom / Edit Item Modal State
+      // Custom Item Modal State
       const [showAddMenuModal, setShowAddMenuModal] = useState(false);
-      const [editingItemCatalog, setEditingItemCatalog] = useState(null); // Item yang sedang diedit di katalog
       const [customName, setCustomName] = useState("");
       const [customPrice, setCustomPrice] = useState("");
       const [customQty, setCustomQty] = useState("1");
       const [customCategory, setCustomCategory] = useState("Ayam & Nasi");
       const [saveToCatalog, setSaveToCatalog] = useState(true);
 
-      // Quick Cart Item Edit State
+      // Modal Edit Harga Item di Keranjang
       const [editingCartItem, setEditingCartItem] = useState(null);
-      const [editCartPrice, setEditCartPrice] = useState("");
+      const [cartEditPrice, setCartEditPrice] = useState("");
 
       // Payment Modal States
       const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -304,13 +167,76 @@
       const [cashPaid, setCashPaid] = useState("");
       
       // Thermal Bluetooth Printer States
-      const [autoPrintEnabled, setAutoPrintEnabled] = useState(false);
+      const [autoPrintEnabled, setAutoPrintEnabled] = useState(true);
       const [showReceiptModal, setShowReceiptModal] = useState(false);
       const [currentTransaction, setCurrentTransaction] = useState(null);
       const [btDevice, setBtDevice] = useState(null);
       const [btConnected, setBtConnected] = useState(false);
-      const [btStatusText, setBtStatusText] = useState("Bluetooth Terputus");
+      const [btStatusText, setBtStatusText] = useState("Printer Terputus");
       const [printerDeviceName, setPrinterDeviceName] = useState("");
+      const [isPrinting, setIsPrinting] = useState(false);
+
+      // Data raster logo thermal
+      const [logoRasterCmds, setLogoRasterCmds] = useState(null);
+
+      // Pre-load & Render Logo ke Command Raster ESC/POS
+      useEffect(() => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = STORE_INFO.logo;
+        img.onload = () => {
+          try {
+            const canvas = document.getElementById("logo-thermal-canvas");
+            if (!canvas) return;
+            const ctx = canvas.getContext("2d");
+            
+            // Ukuran ideal logo printer 58mm (384 titik lebar)
+            const targetWidth = 384;
+            const scale = targetWidth / img.width;
+            const targetHeight = Math.floor(img.height * scale);
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            // Gambar latar putih & logo
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, targetWidth, targetHeight);
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+            const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+            const pixels = imgData.data;
+
+            // Buat Command GS v 0 (Raster bit image ESC/POS)
+            const widthBytes = Math.ceil(targetWidth / 8);
+            const commands = [];
+            
+            // GS v 0 0 widthBytesL widthBytesH heightL heightH
+            commands.push(0x1D, 0x76, 0x30, 0x00);
+            commands.push(widthBytes & 0xFF, (widthBytes >> 8) & 0xFF);
+            commands.push(targetHeight & 0xFF, (targetHeight >> 8) & 0xFF);
+
+            for (let y = 0; y < targetHeight; y++) {
+              for (let xByte = 0; xByte < widthBytes; xByte++) {
+                let byteVal = 0;
+                for (let bit = 0; bit < 8; bit++) {
+                  const x = xByte * 8 + bit;
+                  if (x < targetWidth) {
+                    const idx = (y * targetWidth + x) * 4;
+                    // Formula Grayscale
+                    const brightness = (pixels[idx] * 0.299) + (pixels[idx + 1] * 0.587) + (pixels[idx + 2] * 0.114);
+                    if (brightness < 160) { // Threshold hitam
+                      byteVal |= (0x80 >> bit);
+                    }
+                  }
+                }
+                commands.push(byteVal);
+              }
+            }
+            setLogoRasterCmds(commands);
+          } catch(e) {
+            console.error("Gagal memproses raster logo thermal:", e);
+          }
+        };
+      }, []);
 
       // History Transaksi
       const [history, setHistory] = useState(() => {
@@ -340,33 +266,8 @@
       const cartTotal = useMemo(() => itemsSubtotal + deliveryFee, [itemsSubtotal, deliveryFee]);
       const cartTotalQty = useMemo(() => cart.reduce((acc, curr) => acc + curr.qty, 0), [cart]);
 
-      // Analytics Summaries
-      const analyticsSummary = useMemo(() => {
-        const totalSales = history.reduce((acc, curr) => acc + curr.total, 0);
-        const totalOrders = history.length;
-        const avgOrder = totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0;
-
-        const itemCounts = {};
-        history.forEach(tx => {
-          tx.items.forEach(it => {
-            itemCounts[it.name] = (itemCounts[it.name] || 0) + it.qty;
-          });
-        });
-
-        let topItem = "-";
-        let topCount = 0;
-        Object.keys(itemCounts).forEach(name => {
-          if (itemCounts[name] > topCount) {
-            topCount = itemCounts[name];
-            topItem = name;
-          }
-        });
-
-        return { totalSales, totalOrders, avgOrder, topItem, topCount };
-      }, [history]);
-
+      // Cart Operations
       const addToCart = (product) => {
-        if (soundEnabled) playSound('click');
         setCart(prev => {
           const existing = prev.find(item => item.id === product.id);
           if (existing) {
@@ -377,103 +278,84 @@
         });
       };
 
-      // Open Modal Edit Menu dari Katalog
-      const openEditCatalogModal = (item) => {
-        setEditingItemCatalog(item);
-        setCustomName(item.name);
-        setCustomPrice(item.price.toString());
-        setCustomCategory(item.category);
-        setShowAddMenuModal(true);
+      // Edit Harga Item Dalam Keranjang
+      const openEditCartPrice = (item) => {
+        setEditingCartItem(item);
+        setCartEditPrice(item.price.toString());
       };
 
-      // Modal Simpan Menu Baru ATAU Edit Menu
-      const handleSaveCatalogOrCustom = (e) => {
+      const saveCartPriceChange = () => {
+        if (!editingCartItem) return;
+        const newP = parseFloat(cartEditPrice);
+        if (isNaN(newP) || newP < 0) {
+          showAlert("Harga Tidak Valid", "Masukkan harga yang sesuai.");
+          return;
+        }
+
+        setCart(prev => prev.map(i => i.id === editingCartItem.id ? { ...i, price: newP } : i));
+        setEditingCartItem(null);
+      };
+
+      // Tambah Menu Custom Baru
+      const handleAddCustomMenu = (e) => {
         e.preventDefault();
-        if (!customName.trim() || !customPrice || isNaN(customPrice) || parseFloat(customPrice) < 0) {
+        if (!customName.trim() || !customPrice || isNaN(customPrice) || parseFloat(customPrice) <= 0) {
           showAlert("Input Tidak Valid", "Mohon masukkan nama menu dan harga angka yang sesuai.");
           return;
         }
 
         const priceNum = parseFloat(customPrice);
+        const qtyNum = parseInt(customQty) || 1;
+        const newId = Date.now();
 
-        // Jika mode EDIT menu dari katalog
-        if (editingItemCatalog) {
-          setMenuList(prev => prev.map(item => {
-            if (item.id === editingItemCatalog.id) {
-              return {
-                ...item,
-                name: customName.trim(),
-                price: priceNum,
-                category: customCategory
-              };
-            }
-            return item;
-          }));
+        const newItem = {
+          id: newId,
+          name: customName.trim(),
+          price: priceNum,
+          category: customCategory,
+          icon: "⭐",
+          desc: "Menu manual / khusus"
+        };
 
-          // Juga update jika item ada di keranjang
-          setCart(prev => prev.map(c => c.id === editingItemCatalog.id ? { ...c, price: priceNum, name: customName.trim() } : c));
-
-          showAlert("Harga & Menu Diperbarui", `Menu ${customName} berhasil diperbarui harganya.`);
-        } else {
-          // Jika mode Tambah Custom Menu Baru
-          const qtyNum = parseInt(customQty) || 1;
-          const newId = Date.now();
-
-          const newItem = {
-            id: newId,
-            name: customName.trim(),
-            price: priceNum,
-            category: customCategory,
-            icon: "⭐",
-            desc: "Menu manual / khusus"
-          };
-
-          if (saveToCatalog) {
-            setMenuList(prev => [newItem, ...prev]);
-          }
-
-          setCart(prev => {
-            const existing = prev.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
-            if (existing) {
-              return prev.map(i => i.name.toLowerCase() === newItem.name.toLowerCase() ? { ...i, qty: i.qty + qtyNum } : i);
-            }
-            return [...prev, { ...newItem, qty: qtyNum, note: "" }];
-          });
+        if (saveToCatalog) {
+          setMenuList(prev => [newItem, ...prev]);
         }
 
-        if (soundEnabled) playSound('click');
-        resetMenuForm();
-      };
+        setCart(prev => {
+          const existing = prev.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+          if (existing) {
+            return prev.map(i => i.name.toLowerCase() === newItem.name.toLowerCase() ? { ...i, qty: i.qty + qtyNum } : i);
+          }
+          return [...prev, { ...newItem, qty: qtyNum, note: "" }];
+        });
 
-      const resetMenuForm = () => {
-        setEditingItemCatalog(null);
         setCustomName("");
         setCustomPrice("");
         setCustomQty("1");
         setShowAddMenuModal(false);
       };
 
-      // Modal Quick Edit Harga di Keranjang
-      const openEditCartPrice = (item) => {
-        setEditingCartItem(item);
-        setEditCartPrice(item.price.toString());
+      // Edit Harga Katalog
+      const openEditMenuItem = (item) => {
+        setEditingMenuItem(item);
+        setEditMenuName(item.name);
+        setEditMenuPrice(item.price.toString());
       };
 
-      const handleSaveCartPrice = (e) => {
-        e.preventDefault();
-        const priceNum = parseFloat(editCartPrice);
-        if (isNaN(priceNum) || priceNum < 0) {
-          showAlert("Harga Salah", "Masukkan besaran harga yang valid.");
+      const saveMenuItemEdit = () => {
+        if (!editingMenuItem) return;
+        const p = parseFloat(editMenuPrice);
+        if (!editMenuName.trim() || isNaN(p) || p <= 0) {
+          showAlert("Input Gagal", "Masukkan nama dan harga yang valid.");
           return;
         }
 
-        setCart(prev => prev.map(i => i.id === editingCartItem.id ? { ...i, price: priceNum } : i));
-        setEditingCartItem(null);
-        if (soundEnabled) playSound('click');
+        setMenuList(prev => prev.map(m => m.id === editingMenuItem.id ? { ...m, name: editMenuName.trim(), price: p } : m));
+        setEditingMenuItem(null);
       };
 
-      const handleDeleteMenuItem = (id) => {
-        showConfirm("Hapus Menu?", "Apakah Anda yakin ingin menghapus menu ini dari katalog?", () => {
+      const deleteMenuItem = (id) => {
+        showConfirm("Hapus Menu?", "Yakin ingin menghapus menu ini dari katalog?", () => {
           setMenuList(prev => prev.filter(m => m.id !== id));
         });
       };
@@ -481,13 +363,12 @@
       const resetCatalogMenu = () => {
         showConfirm(
           "Reset Daftar Menu?", 
-          "Semua menu yang Anda ubah/tambah manual akan kembali ke daftar awal iZZi Corner.", 
+          "Semua menu yang Anda ubah atau tambah akan kembali ke menu awal iZZi Corner.", 
           () => setMenuList(INITIAL_MENU)
         );
       };
 
       const updateQty = (id, delta) => {
-        if (soundEnabled) playSound('click');
         setCart(prev => {
           return prev.map(item => {
             if (item.id === id) {
@@ -505,6 +386,7 @@
 
       const clearCart = () => setCart([]);
 
+      // Flow Pembayaran
       const handleOpenPayment = () => {
         if (cart.length === 0) return;
         setCashPaid(cartTotal.toString());
@@ -523,6 +405,7 @@
         const newTx = {
           id: "IZZI-" + Date.now().toString().slice(-6),
           date: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+          rawDate: new Date().toISOString(),
           items: [...cart],
           itemsSubtotal: itemsSubtotal,
           deliveryFee: deliveryFee,
@@ -533,12 +416,12 @@
           change: paymentMethod === "Tunai" ? Math.max(0, change) : 0,
         };
 
-        if (soundEnabled) playSound('success');
         setHistory(prev => [newTx, ...prev]);
         setCurrentTransaction(newTx);
         setShowPaymentModal(false);
         setCart([]);
 
+        // Otomatis cetak thermal jika sudah tersambung
         if (autoPrintEnabled && btConnected) {
           printReceiptThermal(newTx);
         }
@@ -546,20 +429,22 @@
         setShowReceiptModal(true);
       };
 
+      // KONEKSI BLUETOOTH PRINTER THERMAL 58mm
       const connectBluetoothPrinter = async () => {
         try {
           if (!navigator.bluetooth) {
-            showAlert("Tidak Didukung", "Browser Anda belum mendukung Web Bluetooth. Gunakan Google Chrome pada perangkat Android.");
+            showAlert("Tidak Didukung", "Browser Anda belum mendukung Web Bluetooth. Gunakan Google Chrome di HP Android / Laptop.");
             return;
           }
           
-          setBtStatusText("Mencari printer...");
+          setBtStatusText("Mencari Printer...");
           const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
             optionalServices: [
               '000018f0-0000-1000-8000-00805f9b34fb',
               '00001101-0000-1000-8000-00805f9b34fb',
-              'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+              'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+              '0000ff00-0000-1000-8000-00805f9b34fb'
             ]
           });
 
@@ -567,10 +452,10 @@
           setBtDevice(device);
           setBtConnected(true);
           setBtStatusText(`Terhubung: ${device.name || "Printer 58mm"}`);
-          showAlert("Berhasil Terhubung", `Terhubung dengan printer: ${device.name || "Bluetooth Thermal"}`);
+          showAlert("Printer Terhubung", `Berhasil tersambung ke printer: ${device.name || "Thermal Printer 58mm"}`);
         } catch (error) {
           console.error("BT Error:", error);
-          setBtStatusText("Sambungan dibatalkan");
+          setBtStatusText("Printer Terputus");
           setBtConnected(false);
         }
       };
@@ -582,30 +467,25 @@
         return left + " ".repeat(Math.max(1, spaces)) + rightStr;
       };
 
-      const generateEscPosData = async (tx) => {
+      const generateEscPosData = (tx) => {
         let commands = [];
         const encoder = new TextEncoder();
 
         const addText = (str) => commands.push(...encoder.encode(str + "\n"));
         const addCmd = (cmdArr) => commands.push(...cmdArr);
 
-        // Reset Printer ESC @
+        // Init Printer
         addCmd([0x1B, 0x40]); 
         
-        // Cetak Logo Raster jika tersedia
-        try {
-          const logoRasterBytes = await getLogoRasterEscPos();
-          if (logoRasterBytes) {
-            addCmd([0x1B, 0x61, 0x01]); // Align Center
-            addCmd(Array.from(logoRasterBytes));
-            addText("");
-          }
-        } catch (e) {
-          console.log("Logo raster skipped:", e);
+        // CETAK RASTER LOGO JIKA TERSEDIA
+        if (logoRasterCmds && logoRasterCmds.length > 0) {
+          addCmd([0x1B, 0x61, 0x01]); // Center
+          addCmd(logoRasterCmds);
+          addText(""); 
         }
 
-        // Header Text
-        addCmd([0x1B, 0x61, 0x01]); // Center align
+        // Header Center
+        addCmd([0x1B, 0x61, 0x01]);
         addCmd([0x1B, 0x45, 0x01]); // Bold ON
         addText(STORE_INFO.name.toUpperCase());
         addCmd([0x1B, 0x45, 0x00]); // Bold OFF
@@ -614,14 +494,14 @@
         addText("WA: " + STORE_INFO.whatsapp);
         addText("--------------------------------");
 
-        // Transaction Info
-        addCmd([0x1B, 0x61, 0x00]); // Left align
+        // Rincian Transaksi
+        addCmd([0x1B, 0x61, 0x00]); // Left Align
         addText(`No : ${tx.id}`);
         addText(`Tgl: ${tx.date}`);
         addText(`Bayar: ${tx.paymentMethod}`);
         addText("--------------------------------");
 
-        // Items
+        // Daftar Item
         tx.items.forEach(item => {
           addText(item.name);
           if (item.note) addText(`  * ${item.note}`);
@@ -645,8 +525,8 @@
         }
         addText("--------------------------------");
 
-        // Footer
-        addCmd([0x1B, 0x61, 0x01]); // Center align
+        // Footer Center
+        addCmd([0x1B, 0x61, 0x01]);
         addText("Terima Kasih Atas Kunjungannya!");
         addText("Fresh & Delicious Everyday");
         addText("Delivery: WA / Samawa No. 3");
@@ -656,37 +536,59 @@
         return new Uint8Array(commands);
       };
 
+      // FUNGSI KHUSUS CETAK THERMAL BLUETOOTH 58mm
       const printReceiptThermal = async (tx = currentTransaction) => {
         if (!tx) return;
 
-        if (btDevice && btConnected) {
-          try {
-            const server = await btDevice.gatt.connect();
-            const services = await server.getPrimaryServices();
-            if (services.length > 0) {
-              const characteristics = await services[0].getCharacteristics();
-              if (characteristics.length > 0) {
-                const char = characteristics[0];
-                const data = await generateEscPosData(tx);
-                
-                const CHUNK_SIZE = 512;
-                for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-                  const chunk = data.slice(i, i + CHUNK_SIZE);
-                  await char.writeValue(chunk);
-                }
-                showAlert("Berhasil Cetak", "Struk + Logo telah dicetak ke printer Bluetooth Thermal.");
-                return;
-              }
-            }
-          } catch (e) {
-            console.error("Print Error:", e);
-            showAlert("Gagal Cetak BT", "Koneksi Bluetooth terputus. Menggunakan dialog cetak bawaan HP/Sistem.");
-          }
+        if (!btDevice || !btConnected) {
+          showAlert(
+            "Printer Belum Terhubung", 
+            "Aplikasi ini disetting KHUSUS cetak ke Printer Bluetooth Thermal 58mm.\n\nSilakan sambungkan printer Bluetooth Anda di menu Pengaturan atau pada tombol 'BT Printer' di pojok kanan atas."
+          );
+          return;
         }
 
-        window.print();
+        setIsPrinting(true);
+        try {
+          const server = await btDevice.gatt.connect();
+          const services = await server.getPrimaryServices();
+          
+          if (services.length > 0) {
+            let targetChar = null;
+            for (const service of services) {
+              const characteristics = await service.getCharacteristics();
+              if (characteristics.length > 0) {
+                targetChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse) || characteristics[0];
+                if (targetChar) break;
+              }
+            }
+
+            if (targetChar) {
+              const data = generateEscPosData(tx);
+              const CHUNK_SIZE = 128;
+              for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+                const chunk = data.slice(i, i + CHUNK_SIZE);
+                if (targetChar.properties.writeWithoutResponse) {
+                  await targetChar.writeValueWithoutResponse(chunk);
+                } else {
+                  await targetChar.writeValue(chunk);
+                }
+              }
+              showAlert("Cetak Berhasil", "Struk transaksi telah dikirim ke Printer Bluetooth Thermal 58mm.");
+              setIsPrinting(false);
+              return;
+            }
+          }
+          throw new Error("Layanan Bluetooth Printer tidak ditemukan.");
+        } catch (e) {
+          console.error("Print Thermal Error:", e);
+          showAlert("Gagal Cetak Thermal", "Gagal mengirim data ke Printer Bluetooth. Pastikan printer dinyalakan, kertas terpasang, dan Bluetooth HP aktif.");
+        } finally {
+          setIsPrinting(false);
+        }
       };
 
+      // Kirim Struk WA
       const sendWhatsAppReceipt = (tx) => {
         if (!tx) return;
         let text = `*-- STRUK PEMBAYARAN ${STORE_INFO.name.toUpperCase()} --*\n`;
@@ -720,52 +622,59 @@
         window.open(`https://wa.me/?text=${encoded}`, '_blank');
       };
 
-      const exportCSV = () => {
-        if (history.length === 0) {
-          showAlert("Riwayat Kosong", "Belum ada transaksi untuk diekspor.");
-          return;
-        }
+      // Kalkulasi Laporan Penjualan
+      const reportStats = useMemo(() => {
+        const totalRev = history.reduce((acc, curr) => acc + curr.total, 0);
+        const totalTx = history.length;
+        const avgTx = totalTx > 0 ? totalRev / totalTx : 0;
 
-        let csv = "ID Transaksi,Tanggal,Metode Pembayaran,Subtotal,Ongkir,Total\n";
+        // Hitung Item Terlaris
+        const itemCounts = {};
         history.forEach(tx => {
-          csv += `"${tx.id}","${tx.date}","${tx.paymentMethod}",${tx.itemsSubtotal || (tx.total - tx.deliveryFee)},${tx.deliveryFee},${tx.total}\n`;
+          tx.items.forEach(it => {
+            itemCounts[it.name] = (itemCounts[it.name] || 0) + it.qty;
+          });
         });
 
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Laporan_Penjualan_iZZi_Corner_${Date.now()}.csv`;
-        a.click();
-      };
+        const topItems = Object.entries(itemCounts)
+          .map(([name, qty]) => ({ name, qty }))
+          .sort((a, b) => b.qty - a.qty)
+          .slice(0, 5);
+
+        return { totalRev, totalTx, avgTx, topItems };
+      }, [history]);
 
       return (
         <div className="flex flex-col h-full w-full bg-white relative">
           
-          {}
-          <header className="bg-brand-yellow px-3 py-2.5 border-b border-yellow-400 flex items-center justify-between shadow-sm shrink-0">
+          {/* HEADER BAR */}
+          <header className="bg-brand-yellow px-4 py-2.5 border-b border-yellow-400 flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center space-x-2">
-              <BrandLogo className="w-10 h-10" />
+              <img 
+                src={STORE_INFO.logo} 
+                alt="iZZi Corner Logo" 
+                className="w-10 h-10 rounded-xl object-cover shadow-sm bg-yellow-300 border border-yellow-500/50"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.style.display = 'none';
+                  if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+              <div className="w-10 h-10 bg-brand-blue rounded-xl hidden items-center justify-center text-white font-black text-base shadow">
+                iZ
+              </div>
               <div>
-                <h1 className="font-extrabold text-brand-blue text-base leading-tight flex items-center space-x-1">
-                  <span>{STORE_INFO.name}</span>
-                  <span className="text-red-600 text-xs">🔥</span>
-                </h1>
-                <p className="text-[10px] font-semibold text-gray-800">{STORE_INFO.slogan}</p>
+                <h1 className="font-extrabold text-brand-blue text-base leading-tight">{STORE_INFO.name}</h1>
+                <p className="text-[10px] font-semibold text-gray-700">{STORE_INFO.slogan}</p>
               </div>
             </div>
 
             <div className="flex items-center space-x-1.5">
               <button 
-                onClick={() => {
-                  setEditingItemCatalog(null);
-                  setCustomName("");
-                  setCustomPrice("");
-                  setShowAddMenuModal(true);
-                }}
+                onClick={() => setShowAddMenuModal(true)}
                 className="bg-brand-blue text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-brand-blueDark active:scale-95 transition"
               >
-                + Custom
+                + Menu
               </button>
 
               <button 
@@ -782,14 +691,14 @@
             </div>
           </header>
 
-          {/* MAIN CONTAINER */}
+          {/* CONTENT MAIN */}
           <main className="flex-1 overflow-y-auto pb-20 bg-gray-50 no-scrollbar">
             
-            {}
+            {/* TAB KASIR */}
             {activeTab === 'kasir' && (
               <div className="p-3 space-y-3">
                 
-                {/* Search Bar & Manual Custom Button */}
+                {/* Search Bar & Category Filter */}
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2">
                     <div className="relative flex-1">
@@ -803,26 +712,13 @@
                       <svg className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                       </svg>
-                      {searchTerm && (
-                        <button 
-                          onClick={() => setSearchTerm("")}
-                          className="absolute right-3 top-2.5 text-xs text-gray-400 font-bold hover:text-gray-600"
-                        >
-                          ✕
-                        </button>
-                      )}
                     </div>
 
                     <button
-                      onClick={() => {
-                        setEditingItemCatalog(null);
-                        setCustomName("");
-                        setCustomPrice("");
-                        setShowAddMenuModal(true);
-                      }}
-                      className="bg-yellow-400 border border-yellow-500 text-gray-800 text-xs font-bold px-3 py-2 rounded-xl shadow-sm hover:bg-yellow-500 transition shrink-0"
+                      onClick={() => setShowAddMenuModal(true)}
+                      className="bg-yellow-400 border border-yellow-500 text-gray-800 text-xs font-bold px-3 py-2 rounded-xl shadow-sm hover:bg-yellow-500 transition"
                     >
-                      + Manual
+                      + Custom
                     </button>
                   </div>
 
@@ -831,10 +727,7 @@
                     {INITIAL_CATEGORIES.map(cat => (
                       <button
                         key={cat}
-                        onClick={() => {
-                          if (soundEnabled) playSound('click');
-                          setSelectedCategory(cat);
-                        }}
+                        onClick={() => setSelectedCategory(cat)}
                         className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
                           selectedCategory === cat 
                             ? 'bg-brand-blue text-white shadow-md' 
@@ -848,11 +741,11 @@
                 </div>
 
                 {/* Banner Info Pengantaran */}
-                <div className="bg-yellow-100 border border-yellow-300 rounded-xl p-2 flex items-center justify-between text-[11px] text-yellow-900 shadow-sm">
-                  <span>🛵 <strong>Delivery Unit:</strong> +2k/order | <strong>Loby:</strong> Gratis Ongkir</span>
+                <div className="bg-yellow-100 border border-yellow-300 rounded-xl p-2.5 flex items-center justify-between text-[11px] text-yellow-900 shadow-sm">
+                  <span>🛵 <strong>Delivery Unit:</strong> +2k/order | <strong>Loby:</strong> Gratis</span>
                 </div>
 
-                {/* Catalog Grid */}
+                {/* Grid Menu Catalog */}
                 <div className="grid grid-cols-2 gap-2.5">
                   {filteredMenu.map(item => {
                     const inCart = cart.find(c => c.id === item.id);
@@ -870,19 +763,7 @@
                           </span>
                         )}
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-2xl">{item.icon}</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditCatalogModal(item);
-                              }}
-                              title="Edit Harga Menu"
-                              className="text-[10px] bg-gray-100 hover:bg-yellow-200 border text-gray-700 px-1.5 py-0.5 rounded font-semibold transition"
-                            >
-                              ✏️ Edit
-                            </button>
-                          </div>
+                          <div className="text-xl mb-1">{item.icon}</div>
                           <h3 className="font-bold text-gray-800 text-xs leading-snug">{item.name}</h3>
                           <p className="text-[10px] text-gray-500 line-clamp-1 mt-0.5">{item.desc}</p>
                         </div>
@@ -890,7 +771,7 @@
                           <span className="font-extrabold text-brand-blue text-xs">
                             Rp {item.price.toLocaleString('id-ID')}
                           </span>
-                          <button className="w-6 h-6 bg-yellow-400 rounded-lg flex items-center justify-center font-extrabold text-gray-800 text-xs hover:bg-yellow-500 shadow-sm">
+                          <button className="w-5 h-5 bg-yellow-400 rounded-md flex items-center justify-center font-bold text-gray-800 text-xs hover:bg-yellow-500">
                             +
                           </button>
                         </div>
@@ -899,7 +780,7 @@
                   })}
                 </div>
 
-                {}
+                {/* CART DRAWER SECTION */}
                 {cart.length > 0 && (
                   <div className="mt-4 bg-white rounded-2xl p-3 border border-gray-200 shadow-xl space-y-3">
                     <div className="flex items-center justify-between border-b pb-2">
@@ -914,7 +795,7 @@
                       </button>
                     </div>
 
-                    <div className="space-y-2 max-h-52 overflow-y-auto no-scrollbar divide-y divide-gray-100">
+                    <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar divide-y divide-gray-100">
                       {cart.map(item => (
                         <div key={item.id} className="pt-2">
                           <div className="flex items-center justify-between">
@@ -923,10 +804,10 @@
                                 <h4 className="font-semibold text-xs text-gray-800">{item.name}</h4>
                                 <button 
                                   onClick={() => openEditCartPrice(item)}
-                                  className="text-[10px] text-blue-600 hover:underline font-bold"
-                                  title="Ubah harga untuk pesanan ini"
+                                  className="text-[10px] text-brand-blue font-bold underline hover:text-blue-800"
+                                  title="Edit harga item ini"
                                 >
-                                  ✏️
+                                  ✏️ Edit Harga
                                 </button>
                               </div>
                               <p className="text-[10px] text-gray-500">
@@ -943,7 +824,7 @@
 
                           <input
                             type="text"
-                            placeholder="Catatan (pedas, tanpa es, extra pedas)"
+                            placeholder="Catatan (misal: pedas sedang, es dikit)"
                             value={item.note || ""}
                             onChange={(e) => updateNote(item.id, e.target.value)}
                             className="mt-1 w-full bg-gray-50 border border-gray-200 text-[10px] rounded px-2 py-1 text-gray-700 focus:bg-white focus:outline-none"
@@ -952,16 +833,13 @@
                       ))}
                     </div>
 
-                    {/* Delivery Option */}
+                    {/* PILIHAN DELIVERY ONGKIR */}
                     <div className="pt-2 border-t space-y-1.5">
                       <label className="text-[11px] font-bold text-gray-700 block">Lokasi Pengantaran:</label>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (soundEnabled) playSound('click');
-                            setDeliveryOption('loby');
-                          }}
+                          onClick={() => setDeliveryOption('loby')}
                           className={`p-2 rounded-xl border text-left font-semibold text-[11px] transition ${
                             deliveryOption === 'loby'
                               ? 'bg-blue-50 border-brand-blue text-brand-blue ring-1 ring-blue-300'
@@ -974,10 +852,7 @@
 
                         <button
                           type="button"
-                          onClick={() => {
-                            if (soundEnabled) playSound('click');
-                            setDeliveryOption('unit');
-                          }}
+                          onClick={() => setDeliveryOption('unit')}
                           className={`p-2 rounded-xl border text-left font-semibold text-[11px] transition ${
                             deliveryOption === 'unit'
                               ? 'bg-blue-50 border-brand-blue text-brand-blue ring-1 ring-blue-300'
@@ -990,7 +865,7 @@
                       </div>
                     </div>
 
-                    {/* Order Calculation */}
+                    {/* Ringkasan Subtotal */}
                     <div className="pt-2 border-t space-y-1">
                       <div className="flex justify-between items-center text-xs text-gray-500">
                         <span>Subtotal Item:</span>
@@ -1024,19 +899,10 @@
               </div>
             )}
 
-            {}
+            {/* TAB RIWAYAT */}
             {activeTab === 'riwayat' && (
               <div className="p-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-bold text-gray-800 text-sm">Riwayat Transaksi iZZi Corner</h2>
-                  <button
-                    onClick={exportCSV}
-                    className="text-xs font-bold text-brand-blue bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 hover:bg-blue-100"
-                  >
-                    📥 Ekspor CSV
-                  </button>
-                </div>
-
+                <h2 className="font-bold text-gray-800 text-sm">Riwayat Transaksi iZZi Corner</h2>
                 {history.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <p className="text-3xl mb-2">📄</p>
@@ -1087,9 +953,9 @@
                                 setCurrentTransaction(tx);
                                 setShowReceiptModal(true);
                               }}
-                              className="px-2.5 py-1 bg-yellow-400 text-gray-800 font-bold text-[10px] rounded hover:bg-yellow-500"
+                              className="px-2.5 py-1 bg-yellow-400 text-gray-800 font-bold text-[10px] rounded hover:bg-yellow-500 flex items-center space-x-1"
                             >
-                              Struk
+                              <span>🖨️ Cetak 58mm</span>
                             </button>
                           </div>
                         </div>
@@ -1100,57 +966,50 @@
               </div>
             )}
 
-            {}
-            {activeTab === 'analisis' && (
+            {/* TAB LAPORAN */}
+            {activeTab === 'laporan' && (
               <div className="p-3 space-y-3">
                 <h2 className="font-bold text-gray-800 text-sm">Laporan & Analisis Penjualan</h2>
 
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="bg-gradient-to-br from-blue-500 to-brand-blue p-3 rounded-2xl text-white shadow-sm">
-                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Total Omset</p>
-                    <p className="text-base font-black mt-1">Rp {analyticsSummary.totalSales.toLocaleString('id-ID')}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                    <p className="text-[10px] font-bold text-gray-500">Total Omset</p>
+                    <p className="text-base font-black text-emerald-600">Rp {reportStats.totalRev.toLocaleString('id-ID')}</p>
                   </div>
-
-                  <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3 rounded-2xl text-white shadow-sm">
-                    <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Total Transaksi</p>
-                    <p className="text-base font-black mt-1">{analyticsSummary.totalOrders} Struk</p>
-                  </div>
-
-                  <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm">
-                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Rata-rata / Order</p>
-                    <p className="text-sm font-black text-gray-800 mt-1">Rp {analyticsSummary.avgOrder.toLocaleString('id-ID')}</p>
-                  </div>
-
-                  <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm">
-                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Terlaris (Best Seller)</p>
-                    <p className="text-xs font-black text-brand-blue mt-1 line-clamp-1">{analyticsSummary.topItem}</p>
-                    {analyticsSummary.topCount > 0 && (
-                      <p className="text-[9px] text-gray-400">{analyticsSummary.topCount} porsi terjual</p>
-                    )}
+                  <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                    <p className="text-[10px] font-bold text-gray-500">Jumlah Transaksi</p>
+                    <p className="text-base font-black text-brand-blue">{reportStats.totalTx} Order</p>
                   </div>
                 </div>
 
                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
-                  <h3 className="font-bold text-xs text-gray-800">Platform Online & Delivery Info</h3>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {STORE_INFO.onlinePlatforms.map(p => (
-                      <span key={p} className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-1 rounded-md">
-                        {p}
-                      </span>
-                    ))}
-                  </div>
+                  <h3 className="font-bold text-xs text-gray-800">🔥 Menu Paling Laris</h3>
+                  {reportStats.topItems.length === 0 ? (
+                    <p className="text-[11px] text-gray-400">Belum ada data porsi terjual.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {reportStats.topItems.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="font-medium text-gray-700">{idx + 1}. {item.name}</span>
+                          <span className="font-bold bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-[10px]">
+                            {item.qty} porsi
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {}
+            {/* TAB PENGATURAN */}
             {activeTab === 'pengaturan' && (
               <div className="p-3 space-y-3">
-                <h2 className="font-bold text-gray-800 text-sm">Pengaturan Aplikasi Kasir</h2>
+                <h2 className="font-bold text-gray-800 text-sm">Pengaturan Printer & Katalog</h2>
 
                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
                   <h3 className="font-bold text-xs text-gray-800 flex items-center space-x-2">
-                    <span>🖨️ Printer Thermal 58mm (Bluetooth)</span>
+                    <span>🖨️ Printer Thermal Bluetooth 58mm</span>
                   </h3>
                   <div className="bg-gray-50 p-2 rounded-lg border text-[11px] space-y-0.5">
                     <p className="text-gray-600">Status: <strong className={btConnected ? "text-emerald-600" : "text-red-500"}>{btStatusText}</strong></p>
@@ -1161,14 +1020,14 @@
                     onClick={connectBluetoothPrinter}
                     className="w-full bg-brand-blue hover:bg-brand-blueDark text-white font-bold py-2 rounded-xl text-xs shadow transition"
                   >
-                    {btConnected ? "Sambung Ulang Printer" : "Cari Printer Bluetooth"}
+                    {btConnected ? "Sambung Ulang Printer BT 58mm" : "Cari Printer Bluetooth 58mm"}
                   </button>
                 </div>
 
                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
-                  <h3 className="font-bold text-xs text-gray-800">Cetak Otomatis & Efek Suara</h3>
-                  <div className="flex items-center justify-between text-xs py-1 border-b">
-                    <span className="text-gray-600">Cetak otomatis saat bayar</span>
+                  <h3 className="font-bold text-xs text-gray-800">Cetak Otomatis Struk</h3>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">Cetak langsung ke Printer BT setelah bayar</span>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input 
                         type="checkbox" 
@@ -1179,59 +1038,34 @@
                       <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                     </label>
                   </div>
-
-                  <div className="flex items-center justify-between text-xs py-1">
-                    <span className="text-gray-600">Suara Tombol / Beep</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={soundEnabled} 
-                        onChange={(e) => setSoundEnabled(e.target.checked)} 
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                    </label>
-                  </div>
                 </div>
 
-                {/* EDIT & ATUR HARGA KATALOG MENU */}
-                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-xs text-gray-800">Atur Harga & Katalog ({menuList.length} item)</h3>
-                    <button
-                      onClick={() => {
-                        setEditingItemCatalog(null);
-                        setCustomName("");
-                        setCustomPrice("");
-                        setShowAddMenuModal(true);
-                      }}
-                      className="text-xs bg-yellow-400 font-bold px-2 py-1 rounded text-gray-800 hover:bg-yellow-500"
-                    >
-                      + Menu
-                    </button>
+                {/* EDIT HARGA MANAJEMEN KATALOG MENU */}
+                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <h3 className="font-bold text-xs text-gray-800">Edit Harga & Katalog Menu</h3>
+                    <span className="text-[10px] text-gray-500">{menuList.length} Menu</span>
                   </div>
-                  
-                  <div className="max-h-56 overflow-y-auto divide-y divide-gray-100 no-scrollbar pr-1">
-                    {menuList.map(m => (
-                      <div key={m.id} className="py-2 flex items-center justify-between text-xs">
+
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto no-scrollbar divide-y divide-gray-100">
+                    {menuList.map(item => (
+                      <div key={item.id} className="pt-1.5 flex justify-between items-center text-xs">
                         <div>
-                          <span className="font-semibold text-gray-800">{m.icon} {m.name}</span>
-                          <span className="text-[10px] text-brand-blue font-bold block">
-                            Rp {m.price.toLocaleString('id-ID')}
-                          </span>
+                          <p className="font-bold text-gray-800 text-[11px]">{item.name}</p>
+                          <p className="text-[10px] text-gray-500">Rp {item.price.toLocaleString('id-ID')} | <span className="text-brand-blue">{item.category}</span></p>
                         </div>
-                        <div className="flex items-center space-x-1.5">
+                        <div className="flex items-center space-x-1">
                           <button
-                            onClick={() => openEditCatalogModal(m)}
-                            className="bg-blue-50 text-brand-blue border border-blue-200 font-bold px-2 py-1 rounded text-[11px] hover:bg-blue-100"
+                            onClick={() => openEditMenuItem(item)}
+                            className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-[10px] font-bold"
                           >
-                            ✏️ Edit Harga
+                            Edit Harga
                           </button>
                           <button
-                            onClick={() => handleDeleteMenuItem(m.id)}
-                            className="text-red-500 hover:text-red-700 font-bold text-xs p-1"
+                            onClick={() => deleteMenuItem(item.id)}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 px-1.5 py-1 rounded text-[10px] font-bold"
                           >
-                            Hapus
+                            ✕
                           </button>
                         </div>
                       </div>
@@ -1240,22 +1074,99 @@
 
                   <button
                     onClick={resetCatalogMenu}
-                    className="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-bold py-2 rounded-xl text-xs transition mt-2"
+                    className="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-bold py-2 rounded-xl text-xs transition"
                   >
-                    Reset Harga & Menu ke Bawaan
+                    Reset Semua Menu ke Bawaan
                   </button>
                 </div>
               </div>
             )}
           </main>
 
-          {}
+          {/* MODAL EDIT HARGA KATALOG */}
+          {editingMenuItem && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <div className="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl">
+                <h3 className="font-bold text-gray-800 text-sm border-b pb-2">Edit Harga Menu</h3>
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Nama Menu:</label>
+                    <input
+                      type="text"
+                      value={editMenuName}
+                      onChange={(e) => setEditMenuName(e.target.value)}
+                      className="w-full p-2 bg-gray-50 border rounded-lg font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Harga Baru (Rp):</label>
+                    <input
+                      type="number"
+                      value={editMenuPrice}
+                      onChange={(e) => setEditMenuPrice(e.target.value)}
+                      className="w-full p-2 bg-gray-50 border rounded-lg font-bold text-brand-blue"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex space-x-2 pt-2">
+                  <button
+                    onClick={() => setEditingMenuItem(null)}
+                    className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={saveMenuItemEdit}
+                    className="flex-1 py-2 bg-brand-blue text-white font-bold text-xs rounded-xl shadow"
+                  >
+                    Simpan Harga
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL EDIT HARGA ITEM DI KERANJANG */}
+          {editingCartItem && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <div className="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl">
+                <h3 className="font-bold text-gray-800 text-sm border-b pb-2">Penyesuaian Harga Pesanan</h3>
+                <p className="text-xs text-gray-600">Setel harga khusus untuk item <strong>{editingCartItem.name}</strong> pada transaksi ini:</p>
+                <div>
+                  <label className="font-bold text-gray-700 text-xs block mb-1">Harga Baru (Rp):</label>
+                  <input
+                    type="number"
+                    value={cartEditPrice}
+                    onChange={(e) => setCartEditPrice(e.target.value)}
+                    className="w-full p-2 bg-gray-50 border rounded-lg font-bold text-brand-blue text-sm"
+                  />
+                </div>
+
+                <div className="flex space-x-2 pt-2">
+                  <button
+                    onClick={() => setEditingCartItem(null)}
+                    className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={saveCartPriceChange}
+                    className="flex-1 py-2 bg-brand-blue text-white font-bold text-xs rounded-xl shadow"
+                  >
+                    Terapkan
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* MODAL CUSTOM ALERT / CONFIRM */}
           {customAlert.show && (
             <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
               <div className="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl animate-fade-in">
                 <h3 className="font-bold text-gray-800 text-sm border-b pb-1.5">{customAlert.title}</h3>
-                <p className="text-xs text-gray-600 leading-relaxed">{customAlert.message}</p>
+                <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{customAlert.message}</p>
                 <div className="flex justify-end space-x-2 pt-2">
                   {customAlert.type === "confirm" && (
                     <button
@@ -1279,70 +1190,22 @@
             </div>
           )}
 
-          {/* MODAL QUICK EDIT HARGA DI KERANJANG */}
-          {editingCartItem && (
-            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl">
-                <div className="flex justify-between items-center border-b pb-2">
-                  <h3 className="font-bold text-gray-800 text-sm">Penyesuaian Harga Pesanan</h3>
-                  <button onClick={() => setEditingCartItem(null)} className="text-gray-400 font-bold">✕</button>
-                </div>
-
-                <form onSubmit={handleSaveCartPrice} className="space-y-3 text-xs">
-                  <div>
-                    <label className="font-semibold text-gray-600 block mb-1">Item:</label>
-                    <p className="font-bold text-gray-800 text-sm">{editingCartItem.name}</p>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">Harga Satuan Baru (Rp):</label>
-                    <input
-                      type="number"
-                      required
-                      value={editCartPrice}
-                      onChange={(e) => setEditCartPrice(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-sm font-bold text-gray-800 focus:bg-white focus:ring-2 focus:ring-brand-blue focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex space-x-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingCartItem(null)}
-                      className="w-1/2 bg-gray-100 text-gray-700 font-bold py-2 rounded-xl text-xs"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="submit"
-                      className="w-1/2 bg-brand-blue text-white font-bold py-2 rounded-xl text-xs shadow-md"
-                    >
-                      Simpan
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* MODAL TAMBAH / EDIT MENU KATALOG */}
+          {/* MODAL TAMBAH MENU MANUAL */}
           {showAddMenuModal && (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
               <div className="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl">
                 <div className="flex justify-between items-center border-b pb-2">
-                  <h3 className="font-bold text-gray-800 text-sm">
-                    {editingItemCatalog ? "Edit Harga & Menu" : "Tambah Menu Manual"}
-                  </h3>
-                  <button onClick={resetMenuForm} className="text-gray-400 font-bold text-lg">✕</button>
+                  <h3 className="font-bold text-gray-800 text-sm">Tambah Menu Manual</h3>
+                  <button onClick={() => setShowAddMenuModal(false)} className="text-gray-400 font-bold text-lg">✕</button>
                 </div>
 
-                <form onSubmit={handleSaveCatalogOrCustom} className="space-y-2.5 text-xs">
+                <form onSubmit={handleAddCustomMenu} className="space-y-2.5 text-xs">
                   <div>
                     <label className="font-bold text-gray-700 block mb-1">Nama Menu / Item:</label>
                     <input
                       type="text"
                       required
-                      placeholder="Contoh: Ayam Bakar / Es Teh Jumbo"
+                      placeholder="Contoh: Es Teh Manis Spesial"
                       value={customName}
                       onChange={(e) => setCustomName(e.target.value)}
                       className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
@@ -1355,26 +1218,24 @@
                       <input
                         type="number"
                         required
-                        placeholder="15000"
+                        placeholder="10000"
                         value={customPrice}
                         onChange={(e) => setCustomPrice(e.target.value)}
-                        className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs font-bold text-gray-800 focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
+                        className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
                       />
                     </div>
 
-                    {!editingItemCatalog && (
-                      <div>
-                        <label className="font-bold text-gray-700 block mb-1">Banyaknya (Qty):</label>
-                        <input
-                          type="number"
-                          min="1"
-                          required
-                          value={customQty}
-                          onChange={(e) => setCustomQty(e.target.value)}
-                          className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
-                        />
-                      </div>
-                    )}
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Banyaknya (Qty):</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={customQty}
+                        onChange={(e) => setCustomQty(e.target.value)}
+                        className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -1391,26 +1252,24 @@
                     </select>
                   </div>
 
-                  {!editingItemCatalog && (
-                    <div className="flex items-center space-x-2 pt-1">
-                      <input
-                        type="checkbox"
-                        id="saveCatalog"
-                        checked={saveToCatalog}
-                        onChange={(e) => setSaveToCatalog(e.target.checked)}
-                        className="rounded border-gray-300 text-brand-blue"
-                      />
-                      <label htmlFor="saveCatalog" className="text-[11px] text-gray-600">
-                        Simpan juga ke daftar menu kasir
-                      </label>
-                    </div>
-                  )}
+                  <div className="flex items-center space-x-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="saveCatalog"
+                      checked={saveToCatalog}
+                      onChange={(e) => setSaveToCatalog(e.target.checked)}
+                      className="rounded border-gray-300 text-brand-blue"
+                    />
+                    <label htmlFor="saveCatalog" className="text-[11px] text-gray-600">
+                      Simpan juga ke daftar menu kasir
+                    </label>
+                  </div>
 
                   <button
                     type="submit"
                     className="w-full bg-brand-blue hover:bg-brand-blueDark text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition"
                   >
-                    {editingItemCatalog ? "Simpan Perubahan Harga" : "+ Masukkan ke Pesanan"}
+                    + Masukkan ke Pesanan
                   </button>
                 </form>
               </div>
@@ -1437,10 +1296,7 @@
                     {["Tunai", "QRIS", "GrabFood", "GoFood", "ShopeeFood"].map(m => (
                       <button
                         key={m}
-                        onClick={() => {
-                          if (soundEnabled) playSound('click');
-                          setPaymentMethod(m);
-                        }}
+                        onClick={() => setPaymentMethod(m)}
                         className={`py-1.5 px-1 text-xs font-bold rounded-lg border transition ${
                           paymentMethod === m 
                             ? 'bg-brand-blue text-white border-brand-blue' 
@@ -1467,10 +1323,7 @@
                       {[cartTotal, 10000, 20000, 50000, 100000].map(amt => (
                         <button
                           key={amt}
-                          onClick={() => {
-                            if (soundEnabled) playSound('click');
-                            setCashPaid(amt.toString());
-                          }}
+                          onClick={() => setCashPaid(amt.toString())}
                           className="px-2 py-1 bg-gray-100 hover:bg-gray-200 border text-gray-800 font-bold text-xs rounded-lg"
                         >
                           {amt === cartTotal ? "Uang Pas" : `Rp ${(amt/1000)}rb`}
@@ -1499,8 +1352,7 @@
             </div>
           )}
 
-          {}
-          {/* MODAL STRUK SUKSES & OPSIONAL CETAK STRUK DENGAN LOGO */}
+          {/* MODAL STRUK SUKSES & CETAK BLUETOOTH THERMAL */}
           {showReceiptModal && currentTransaction && (
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
               <div className="bg-white w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto shadow-2xl">
@@ -1513,17 +1365,17 @@
                   <p className="text-[11px] text-gray-500">Kode: {currentTransaction.id}</p>
                 </div>
 
-                {/* PRATINJAU STRUK DENGAN LOGO */}
+                {/* PRATINJAU STRUK 58mm */}
                 <div 
-                  id="printable-receipt"
                   className="bg-yellow-50/50 border border-dashed border-gray-300 p-3 rounded-xl receipt-font text-xs space-y-1.5 text-gray-800 shadow-inner"
                 >
-                  <div className="text-center border-b border-dashed border-gray-400 pb-2 flex flex-col items-center">
-                    {/* LOGO DI STRUK */}
-                    <div className="mb-1.5">
-                      <BrandLogo className="w-14 h-14 rounded-full border-2 border-yellow-400" />
-                    </div>
-
+                  <div className="text-center border-b border-dashed border-gray-400 pb-2">
+                    <img 
+                      src={STORE_INFO.logo} 
+                      alt="Logo iZZi Corner" 
+                      className="w-16 h-16 mx-auto mb-1 object-contain rounded-full border border-gray-300"
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
                     <p className="font-bold text-xs">{STORE_INFO.name.toUpperCase()}</p>
                     <p className="text-[10px]">{STORE_INFO.slogan}</p>
                     <p className="text-[9px] text-gray-600">{STORE_INFO.address}</p>
@@ -1593,13 +1445,14 @@
                   </div>
                 </div>
 
-                {/* TOMBOL AKSI CETAK */}
+                {/* PILIHAN CETAK BLUETOOTH THERMAL KHUSUS */}
                 <div className="space-y-1.5 pt-1">
                   <button
                     onClick={() => printReceiptThermal(currentTransaction)}
-                    className="w-full bg-brand-blue hover:bg-brand-blueDark text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-2 shadow transition"
+                    disabled={isPrinting}
+                    className="w-full bg-brand-blue hover:bg-brand-blueDark text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center space-x-2 shadow transition active:scale-98 disabled:opacity-50"
                   >
-                    <span>🖨️ Cetak Struk + Logo Thermal (58mm)</span>
+                    <span>{isPrinting ? "Mencetak..." : "🖨️ Cetak ke Printer Bluetooth 58mm"}</span>
                   </button>
 
                   <button
@@ -1613,7 +1466,7 @@
                     onClick={() => setShowReceiptModal(false)}
                     className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-xl text-xs transition"
                   >
-                    ⚡ Transaksi Baru (Selesai Tanpa Cetak)
+                    ⚡ Transaksi Baru (Selesai)
                   </button>
                 </div>
 
@@ -1624,10 +1477,7 @@
           {/* BOTTOM NAVIGATION */}
           <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 px-1 shadow-lg z-10">
             <button
-              onClick={() => {
-                if (soundEnabled) playSound('click');
-                setActiveTab('kasir');
-              }}
+              onClick={() => setActiveTab('kasir')}
               className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'kasir' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1637,10 +1487,7 @@
             </button>
 
             <button
-              onClick={() => {
-                if (soundEnabled) playSound('click');
-                setActiveTab('riwayat');
-              }}
+              onClick={() => setActiveTab('riwayat')}
               className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'riwayat' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1650,23 +1497,17 @@
             </button>
 
             <button
-              onClick={() => {
-                if (soundEnabled) playSound('click');
-                setActiveTab('analisis');
-              }}
-              className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'analisis' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
+              onClick={() => setActiveTab('laporan')}
+              className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'laporan' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
               </svg>
               <span className="text-[10px] mt-0.5">Laporan</span>
             </button>
 
             <button
-              onClick={() => {
-                if (soundEnabled) playSound('click');
-                setActiveTab('pengaturan');
-              }}
+              onClick={() => setActiveTab('pengaturan')}
               className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'pengaturan' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
