@@ -46,25 +46,6 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .receipt-font { font-family: 'Courier New', Courier, monospace; }
   </style>
-
-  <!-- Firebase JS Web SDK for Multi-Device Cloud Sync -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // Attach to window so Babel component can access
-    window.FirebaseSDK = {
-      initializeApp,
-      getAuth,
-      signInAnonymously,
-      signInWithCustomToken,
-      getFirestore,
-      collection,
-      addDoc,
-      onSnapshot
-    };
-  </script>
 </head>
 <body class="min-h-screen flex items-center justify-center p-0 sm:p-3">
   <div id="root" class="w-full max-w-md h-screen sm:h-[92vh] flex flex-col bg-white overflow-hidden shadow-2xl sm:rounded-2xl relative"></div>
@@ -119,25 +100,6 @@
       const [selectedCategory, setSelectedCategory] = useState("Semua");
       const [searchTerm, setSearchTerm] = useState("");
 
-      // Cloud Sync States
-      const [isCloudSynced, setIsCloudSynced] = useState(false);
-      const [cloudStatus, setCloudStatus] = useState("Menghubungkan Cloud...");
-      const dbRef = useRef(null);
-
-      // Google Sheets Webhook URL State
-      const [gsheetUrl, setGsheetUrl] = useState(() => {
-        try {
-          return localStorage.getItem('izzi_pos_gsheet_url') || "";
-        } catch(e) { return ""; }
-      });
-      const [showGsheetGuide, setShowGsheetGuide] = useState(false);
-
-      useEffect(() => {
-        try {
-          localStorage.setItem('izzi_pos_gsheet_url', gsheetUrl);
-        } catch(e){}
-      }, [gsheetUrl]);
-
       // Custom Alert Modal State
       const [customAlert, setCustomAlert] = useState({
         show: false,
@@ -180,7 +142,7 @@
       const [editMenuName, setEditMenuName] = useState("");
       const [editMenuPrice, setEditMenuPrice] = useState("");
 
-      // Delivery Option State ('loby' = Rp 0, 'unit' = Rp 2000) & Detail Unit/Nama
+      // Delivery Option State ('loby' = Rp 0, 'unit' = Rp 2000) & Detail Lokasi/Unit
       const [deliveryOption, setDeliveryOption] = useState('loby');
       const [unitDetail, setUnitDetail] = useState('');
       const deliveryFee = deliveryOption === 'unit' ? 2000 : 0;
@@ -215,7 +177,7 @@
       // Ref Penanganan Reconnect Otomatis Bluetooth
       const btDeviceRef = useRef(null);
 
-      // History Transaksi (Lokal & Cloud Synchronized)
+      // History Transaksi
       const [history, setHistory] = useState(() => {
         try {
           const saved = localStorage.getItem('izzi_pos_history');
@@ -225,79 +187,11 @@
         }
       });
 
-      // INISIALISASI REAL-TIME CLOUD DATABASE (MULTI-DEVICE SYNC)
       useEffect(() => {
-        let unsubscribe = null;
-        let isMounted = true;
-
-        async function connectCloudDatabase() {
-          try {
-            const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore, collection, onSnapshot } = window.FirebaseSDK || {};
-            if (!initializeApp) {
-              setCloudStatus("Mode Lokal (SDK Loading)");
-              return;
-            }
-
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'izzi-pos-app';
-            const firebaseConfig = typeof __firebase_config !== 'undefined' 
-              ? JSON.parse(__firebase_config) 
-              : { apiKey: "demo-key", authDomain: "demo.firebaseapp.com", projectId: "demo-project" };
-
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const db = getFirestore(app);
-            dbRef.current = db;
-
-            // Authentication Before Queries
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
-
-            if (!isMounted) return;
-
-            // Public Shared Transactions Path
-            const transColRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
-
-            // Real-time listener: Auto update on all open devices
-            unsubscribe = onSnapshot(transColRef, (snapshot) => {
-              const remoteHistory = [];
-              snapshot.forEach((docSnap) => {
-                remoteHistory.push({ docId: docSnap.id, ...docSnap.data() });
-              });
-
-              // Sort in memory (newest first) without needing composite index
-              remoteHistory.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-              if (isMounted) {
-                setHistory(remoteHistory);
-                setIsCloudSynced(true);
-                setCloudStatus("Cloud Active ⚡");
-                try {
-                  localStorage.setItem('izzi_pos_history', JSON.stringify(remoteHistory));
-                } catch(e){}
-              }
-            }, (err) => {
-              console.error("Cloud sync error:", err);
-              if (isMounted) {
-                setCloudStatus("Mode Lokal (Offline)");
-              }
-            });
-
-          } catch (e) {
-            console.error("Firebase connection error:", e);
-            if (isMounted) setCloudStatus("Mode Lokal");
-          }
-        }
-
-        connectCloudDatabase();
-
-        return () => {
-          isMounted = false;
-          if (unsubscribe) unsubscribe();
-        };
-      }, []);
+        try {
+          localStorage.setItem('izzi_pos_history', JSON.stringify(history));
+        } catch(e){}
+      }, [history]);
 
       const filteredMenu = useMemo(() => {
         return menuList.filter(item => {
@@ -434,37 +328,7 @@
         setShowPaymentModal(true);
       };
 
-      // FUNGSI SEND DATA KE GOOGLE SHEETS
-      const sendToGoogleSheets = (tx) => {
-        if (!gsheetUrl || !gsheetUrl.trim().startsWith("http")) return;
-
-        const payload = {
-          id: tx.id,
-          date: tx.date,
-          paymentMethod: tx.paymentMethod,
-          unitDetail: tx.unitDetail || "-",
-          itemsSummary: tx.items.map(i => `${i.name} (${i.qty}x)`).join(", "),
-          subtotal: tx.itemsSubtotal,
-          deliveryFee: tx.deliveryFee,
-          total: tx.total,
-          paid: tx.paid,
-          change: tx.change
-        };
-
-        fetch(gsheetUrl.trim(), {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }).then(() => {
-          console.log("Berhasil dikirim ke Google Sheets.");
-        }).catch(err => {
-          console.error("Gagal kirim ke Google Sheets:", err);
-        });
-      };
-
-      // PROSES PEMBAYARAN & SINKRONISASI REAL-TIME
-      const processPayment = async () => {
+      const processPayment = () => {
         const numericPaid = parseFloat(cashPaid) || cartTotal;
         const change = numericPaid - cartTotal;
 
@@ -478,7 +342,6 @@
 
         const newTx = {
           id: "IZZI-" + Date.now().toString().slice(-6),
-          createdAt: Date.now(),
           date: formattedDate,
           items: [...cart],
           itemsSubtotal: itemsSubtotal,
@@ -491,23 +354,7 @@
           change: paymentMethod === "Tunai" ? Math.max(0, change) : 0,
         };
 
-        // 1. Simpan ke Database Cloud jika online (sehingga semua HP ter-update)
-        if (dbRef.current) {
-          try {
-            const { collection, addDoc } = window.FirebaseSDK;
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'izzi-pos-app';
-            await addDoc(collection(dbRef.current, 'artifacts', appId, 'public', 'data', 'transactions'), newTx);
-          } catch(e) {
-            console.error("Simpan cloud gagal, beralih ke simpan lokal:", e);
-            setHistory(prev => [newTx, ...prev]);
-          }
-        } else {
-          setHistory(prev => [newTx, ...prev]);
-        }
-
-        // 2. Kirim ke Google Sheets jika Webhook URL dikonfigurasi
-        sendToGoogleSheets(newTx);
-
+        setHistory(prev => [newTx, ...prev]);
         setCurrentTransaction(newTx);
         setShowPaymentModal(false);
         setCart([]);
@@ -570,6 +417,7 @@
         return left + " ".repeat(Math.max(1, spaces)) + rightStr;
       };
 
+      // HANYA TEKS MURNI SANGAT RINGAN TANPA DATA LOGO BITMAP SAMA SEKALI
       const generateEscPosData = (tx) => {
         let commands = [];
         const encoder = new TextEncoder();
@@ -596,7 +444,7 @@
         addText(`Tgl: ${tx.date}`);
         addText(`Bayar: ${tx.paymentMethod}`);
         if (tx.unitDetail) {
-          addText(`Unit/Nama: ${tx.unitDetail}`);
+          addText(`Lokasi: ${tx.unitDetail}`);
         }
         addText("--------------------------------");
 
@@ -635,6 +483,7 @@
         return new Uint8Array(commands);
       };
 
+      // AKSI CETAK RINGAN DENGEN CHUNK KECIL & DELAY SUPAYA TIDAK MACET
       const printReceiptThermal = async (tx = currentTransaction) => {
         if (!tx) return;
 
@@ -675,6 +524,7 @@
             if (targetChar) {
               const data = generateEscPosData(tx);
               
+              // CHUNK KECIL (64 BYTE) & JEDA 20MS SUPAYA BUFFER PRINTER TIDAK OVERFLOW (MACET)
               const CHUNK_SIZE = 64; 
               for (let i = 0; i < data.length; i += CHUNK_SIZE) {
                 const chunk = data.slice(i, i + CHUNK_SIZE);
@@ -683,6 +533,7 @@
                 } else {
                   await targetChar.writeValue(chunk);
                 }
+                // Delay 20ms per pengiriman chunk
                 await new Promise(r => setTimeout(r, 20));
               }
 
@@ -710,7 +561,7 @@
         text += `Tanggal: ${tx.date}\n`;
         text += `Metode: ${tx.paymentMethod}\n`;
         if (tx.unitDetail) {
-          text += `Unit / Nama: ${tx.unitDetail}\n`;
+          text += `Lokasi / Unit: ${tx.unitDetail}\n`;
         }
         text += `-----------------------------------\n`;
         tx.items.forEach(i => {
@@ -772,10 +623,7 @@
               </div>
               <div>
                 <h1 className="font-extrabold text-brand-blue text-base leading-tight">{STORE_INFO.name}</h1>
-                <div className="flex items-center space-x-1 mt-0.5">
-                  <span className={`w-2 h-2 rounded-full ${isCloudSynced ? 'bg-emerald-600 animate-pulse' : 'bg-amber-500'}`}></span>
-                  <p className="text-[9px] font-bold text-gray-700">{cloudStatus}</p>
-                </div>
+                <p className="text-[10px] font-semibold text-gray-700">{STORE_INFO.slogan}</p>
               </div>
             </div>
 
@@ -943,9 +791,9 @@
                       ))}
                     </div>
 
-                    {/* PILIHAN DELIVERY ONGKIR & INPUT UNIT/NAMA */}
+                    {/* PILIHAN DELIVERY ONGKIR & INPUT UNIT */}
                     <div className="pt-2 border-t space-y-2">
-                      <label className="text-[11px] font-bold text-gray-700 block">Pengantaran & Unit/Nama:</label>
+                      <label className="text-[11px] font-bold text-gray-700 block">Lokasi Pengantaran:</label>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <button
                           type="button"
@@ -974,11 +822,11 @@
                         </button>
                       </div>
 
-                      {/* KOLOM INPUT UNIT / NAMA */}
+                      {/* KOLOM INPUT TULIS UNIT / LOKASI */}
                       <div>
                         <input
                           type="text"
-                          placeholder={deliveryOption === 'unit' ? "Tulis Unit / Nama Pemesan (contoh: Unit 12A - Bpk Budi)" : "Detail Unit / Nama Pemesan (opsional)"}
+                          placeholder={deliveryOption === 'unit' ? "Tulis nomor unit (contoh: Unit 12A / Lantai 5)" : "Detail lokasi (opsional, contoh: Loby Utama)"}
                           value={unitDetail}
                           onChange={(e) => setUnitDetail(e.target.value)}
                           className="w-full p-2 bg-gray-50 border border-gray-300 rounded-xl text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
@@ -1023,14 +871,7 @@
             {/* TAB RIWAYAT */}
             {activeTab === 'riwayat' && (
               <div className="p-3 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h2 className="font-bold text-gray-800 text-sm">Riwayat Transaksi iZZi Corner</h2>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
-                    <span>Live Sync Cloud</span>
-                  </span>
-                </div>
-
+                <h2 className="font-bold text-gray-800 text-sm">Riwayat Transaksi iZZi Corner</h2>
                 {history.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <p className="text-3xl mb-2">📄</p>
@@ -1039,12 +880,12 @@
                 ) : (
                   <div className="space-y-2.5">
                     {history.map(tx => (
-                      <div key={tx.docId || tx.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                      <div key={tx.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
                         <div className="flex justify-between items-start border-b pb-2">
                           <div>
                             <span className="font-bold text-gray-800 text-xs">{tx.id}</span>
                             <p className="text-[10px] text-gray-500">{tx.date}</p>
-                            {tx.unitDetail && <p className="text-[10px] text-brand-blue font-bold">👤 Unit/Nama: {tx.unitDetail}</p>}
+                            {tx.unitDetail && <p className="text-[10px] text-brand-blue font-bold">📍 {tx.unitDetail}</p>}
                           </div>
                           <span className="bg-blue-100 text-brand-blue text-[10px] font-bold px-2 py-0.5 rounded-full">
                             {tx.paymentMethod}
@@ -1098,10 +939,7 @@
             {/* TAB LAPORAN */}
             {activeTab === 'laporan' && (
               <div className="p-3 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h2 className="font-bold text-gray-800 text-sm">Laporan & Analisis Penjualan</h2>
-                  <span className="text-[10px] text-gray-500 font-semibold">Terkoneksi Seluruh HP</span>
-                </div>
+                <h2 className="font-bold text-gray-800 text-sm">Laporan & Analisis Penjualan</h2>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
@@ -1137,39 +975,7 @@
             {/* TAB PENGATURAN */}
             {activeTab === 'pengaturan' && (
               <div className="p-3 space-y-3">
-                <h2 className="font-bold text-gray-800 text-sm">Pengaturan Database, Printer & Katalog</h2>
-
-                {/* SINKRONISASI DATABASE GOOGLE SHEETS */}
-                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-xs text-gray-800 flex items-center space-x-1.5">
-                      <span>📊 Google Sheets Database</span>
-                    </h3>
-                    <button
-                      onClick={() => setShowGsheetGuide(true)}
-                      className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full hover:bg-emerald-200"
-                    >
-                      📘 Panduan & Skrip
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-500">
-                    Masukkan Webhook App Script URL Google Sheets Anda agar setiap transaksi otomatis tercatat di Google Sheet.
-                  </p>
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="https://script.google.com/macros/s/.../exec"
-                      value={gsheetUrl}
-                      onChange={(e) => setGsheetUrl(e.target.value)}
-                      className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs font-mono focus:bg-white focus:outline-none"
-                    />
-                  </div>
-                  {gsheetUrl && (
-                    <p className="text-[10px] text-emerald-600 font-bold">
-                      ✓ Webhook Google Sheets terhubung
-                    </p>
-                  )}
-                </div>
+                <h2 className="font-bold text-gray-800 text-sm">Pengaturan Printer & Katalog</h2>
 
                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
                   <h3 className="font-bold text-xs text-gray-800 flex items-center space-x-2">
@@ -1246,60 +1052,6 @@
               </div>
             )}
           </main>
-
-          {/* MODAL PANDUAN GOOGLE SHEETS */}
-          {showGsheetGuide && (
-            <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
-              <div className="bg-white w-full max-w-sm rounded-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto shadow-2xl">
-                <div className="flex justify-between items-center border-b pb-2">
-                  <h3 className="font-bold text-gray-800 text-sm">Cara Integrasi Google Sheets</h3>
-                  <button onClick={() => setShowGsheetGuide(false)} className="text-gray-400 font-bold">✕</button>
-                </div>
-
-                <div className="text-xs text-gray-600 space-y-2">
-                  <p>1. Buka <strong>Google Sheets</strong> baru Anda.</p>
-                  <p>2. Buat header di baris ke-1: <br/><code className="bg-gray-100 p-1 rounded block mt-1 font-mono text-[10px]">No Transaksi | Tanggal | Metode | Unit/Nama | Item | Subtotal | Ongkir | Total | Tunai | Kembali</code></p>
-                  <p>3. Klik menu <strong>Ekstensi &gt; Apps Script</strong>.</p>
-                  <p>4. Hapus kode bawaan, lalu copy-paste kode berikut:</p>
-
-                  <textarea
-                    readOnly
-                    rows={8}
-                    className="w-full p-2 bg-slate-900 text-emerald-400 font-mono text-[10px] rounded-lg border"
-                    value={`function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = JSON.parse(e.postData.contents);
-  sheet.appendRow([
-    data.id,
-    data.date,
-    data.paymentMethod,
-    data.unitDetail,
-    data.itemsSummary,
-    data.subtotal,
-    data.deliveryFee,
-    data.total,
-    data.paid,
-    data.change
-  ]);
-  return ContentService.createTextOutput("OK");
-}`}
-                  />
-
-                  <p>5. Klik <strong>Terapkan (Deploy) &gt; Penerapan baru</strong>.</p>
-                  <p>6. Pilih tipe: <strong>Aplikasi Web</strong>.</p>
-                  <p>7. Pada "Siapa yang memiliki akses", pilih: <strong>Siapa saja (Anyone)</strong>.</p>
-                  <p>8. Salin <strong>URL Aplikasi Web</strong> lalu tempel pada kolom Webhook URL di aplikasi Kasir ini.</p>
-                </div>
-
-                <button
-                  onClick={() => setShowGsheetGuide(false)}
-                  className="w-full py-2 bg-brand-blue text-white font-bold text-xs rounded-xl shadow"
-                >
-                  Saya Mengerti
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* MODAL EDIT HARGA KATALOG */}
           {editingMenuItem && (
@@ -1583,7 +1335,7 @@
                   <p className="text-[11px] text-gray-500">Kode: {currentTransaction.id}</p>
                 </div>
 
-                {/* PRATINJAU STRUK */}
+                {/* PRATINJAU STRUK DENGAN BENTUK RINGAN & TULISAN LOKASI */}
                 <div 
                   className="bg-[#FFFFF5] border border-dashed border-gray-300 p-3.5 rounded-xl receipt-font text-xs space-y-1.5 text-gray-800 shadow-inner"
                 >
