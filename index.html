@@ -50,9 +50,6 @@
 <body class="min-h-screen flex items-center justify-center p-0 sm:p-3">
   <div id="root" class="w-full max-w-md h-screen sm:h-[92vh] flex flex-col bg-white overflow-hidden shadow-2xl sm:rounded-2xl relative"></div>
 
-  <!-- Canvas Tersembunyi untuk Konversi Bitmap Logo Thermal -->
-  <canvas id="logo-thermal-canvas" width="384" height="120" style="display:none;"></canvas>
-
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
@@ -127,7 +124,7 @@
       // Menu List dengan LocalStorage
       const [menuList, setMenuList] = useState(() => {
         try {
-          const savedMenu = localStorage.getItem('izzi_pos_menu_v6');
+          const savedMenu = localStorage.getItem('izzi_pos_menu_v7');
           return savedMenu ? JSON.parse(savedMenu) : INITIAL_MENU;
         } catch(e) {
           return INITIAL_MENU;
@@ -136,7 +133,7 @@
 
       useEffect(() => {
         try {
-          localStorage.setItem('izzi_pos_menu_v6', JSON.stringify(menuList));
+          localStorage.setItem('izzi_pos_menu_v7', JSON.stringify(menuList));
         } catch(e){}
       }, [menuList]);
 
@@ -179,64 +176,6 @@
 
       // Ref Penanganan Reconnect Otomatis Bluetooth
       const btDeviceRef = useRef(null);
-
-      // Data raster logo thermal
-      const [logoRasterCmds, setLogoRasterCmds] = useState(null);
-
-      // Pre-load & Render logo.png ke Command Raster ESC/POS
-      useEffect(() => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.src = STORE_INFO.logo;
-        img.onload = () => {
-          try {
-            const canvas = document.getElementById("logo-thermal-canvas");
-            if (!canvas) return;
-            const ctx = canvas.getContext("2d");
-            
-            const targetWidth = 384; // 58mm titik cetak
-            const scale = targetWidth / img.width;
-            const targetHeight = Math.floor(img.height * scale);
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, targetWidth, targetHeight);
-            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-            const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-            const pixels = imgData.data;
-
-            const widthBytes = Math.ceil(targetWidth / 8);
-            const commands = [];
-            
-            // GS v 0 0 widthBytesL widthBytesH heightL heightH
-            commands.push(0x1D, 0x76, 0x30, 0x00);
-            commands.push(widthBytes & 0xFF, (widthBytes >> 8) & 0xFF);
-            commands.push(targetHeight & 0xFF, (targetHeight >> 8) & 0xFF);
-
-            for (let y = 0; y < targetHeight; y++) {
-              for (let xByte = 0; xByte < widthBytes; xByte++) {
-                let byteVal = 0;
-                for (let bit = 0; bit < 8; bit++) {
-                  const x = xByte * 8 + bit;
-                  if (x < targetWidth) {
-                    const idx = (y * targetWidth + x) * 4;
-                    const brightness = (pixels[idx] * 0.299) + (pixels[idx + 1] * 0.587) + (pixels[idx + 2] * 0.114);
-                    if (brightness < 160) {
-                      byteVal |= (0x80 >> bit);
-                    }
-                  }
-                }
-                commands.push(byteVal);
-              }
-            }
-            setLogoRasterCmds(commands);
-          } catch(e) {
-            console.error("Gagal memproses raster logo.png:", e);
-          }
-        };
-      }, []);
 
       // History Transaksi
       const [history, setHistory] = useState(() => {
@@ -420,35 +359,19 @@
         setShowPaymentModal(false);
         setCart([]);
 
-        if (autoPrintEnabled && btConnected) {
+        if (autoPrintEnabled && (btConnected || btDeviceRef.current)) {
           printReceiptThermal(newTx);
         }
         
         setShowReceiptModal(true);
       };
 
-      // FUNGSI AUTO-RECONNECT DAN LISTEN PENYAMBUNGAN PRINTER BLUETOOTH
+      // AUTO-RECONNECT LISTENER BLUETOOTH
       const handleDisconnected = (event) => {
         const device = event.target;
-        console.log(`Printer Bluetooth ${device.name} terputus. Mencoba reconnect otomatis...`);
+        console.log(`Printer Bluetooth ${device.name} terputus.`);
         setBtConnected(false);
-        setBtStatusText("Menghubungkan...");
-
-        // Usaha menyambung kembali secara berkala jika printer masih hidup
-        setTimeout(() => {
-          if (device && device.gatt) {
-            device.gatt.connect()
-              .then(() => {
-                console.log("Auto-reconnect printer berhasil!");
-                setBtConnected(true);
-                setBtStatusText(device.name || "Printer 58mm");
-              })
-              .catch(err => {
-                console.log("Gagal auto-reconnect:", err);
-                setBtStatusText("BT Terputus");
-              });
-          }
-        }, 2000);
+        setBtStatusText("BT Terputus");
       };
 
       // KONEKSI BLUETOOTH PRINTER THERMAL 58mm
@@ -466,13 +389,12 @@
               '000018f0-0000-1000-8000-00805f9b34fb',
               '00001101-0000-1000-8000-00805f9b34fb',
               'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-              '0000ff00-0000-1000-8000-00805f9b34fb'
+              '0000ff00-0000-1000-8000-00805f9b34fb',
+              '00004953-0000-1000-8000-00805f9b34fb'
             ]
           });
 
-          // Tambahkan listener saat terputus agar otomatis reconnect saat printer dihidupkan
           device.addEventListener('gattserverdisconnected', handleDisconnected);
-
           await device.gatt.connect();
 
           btDeviceRef.current = device;
@@ -480,7 +402,7 @@
           setBtDevice(device);
           setBtConnected(true);
           setBtStatusText(device.name || "Printer 58mm");
-          showAlert("Printer Terhubung", `Berhasil tersambung ke printer: ${device.name || "Thermal Printer 58mm"}\n\nKoneksi akan tetap dijaga otomatis saat printer dalam keadaan hidup.`);
+          showAlert("Printer Terhubung", `Berhasil tersambung ke printer: ${device.name || "Thermal Printer 58mm"}`);
         } catch (error) {
           console.error("BT Error:", error);
           setBtStatusText("BT Printer");
@@ -495,6 +417,7 @@
         return left + " ".repeat(Math.max(1, spaces)) + rightStr;
       };
 
+      // HANYA TEKS MURNI SANGAT RINGAN TANPA DATA LOGO BITMAP SAMA SEKALI
       const generateEscPosData = (tx) => {
         let commands = [];
         const encoder = new TextEncoder();
@@ -504,15 +427,8 @@
 
         // Reset Printer
         addCmd([0x1B, 0x40]); 
-        
-        // Raster Logo jika ada
-        if (logoRasterCmds && logoRasterCmds.length > 0) {
-          addCmd([0x1B, 0x61, 0x01]);
-          addCmd(logoRasterCmds);
-          addText(""); 
-        }
 
-        // Header Center Sesuai Gambar
+        // Header Center
         addCmd([0x1B, 0x61, 0x01]); // Center Align
         addCmd([0x1B, 0x45, 0x01]); // Bold ON
         addText(STORE_INFO.name.toUpperCase());
@@ -532,7 +448,7 @@
         }
         addText("--------------------------------");
 
-        // Daftar Item Sesuai Format Gambar
+        // Daftar Item
         tx.items.forEach(item => {
           addText(item.name);
           if (item.note) addText(`  * ${item.note}`);
@@ -543,11 +459,8 @@
 
         addText("--------------------------------");
 
-        // Ongkir & Lokasi Unit
+        // Ongkir
         let ongkirText = tx.deliveryFee > 0 ? `Rp ${tx.deliveryFee.toLocaleString('id-ID')}` : "GRATIS (Loby/Sec)";
-        if (tx.deliveryOption === 'unit' && tx.unitDetail) {
-          ongkirText += ` (${tx.unitDetail})`;
-        }
         addText(format58mmLine("Ongkir:", ongkirText));
 
         // Total
@@ -570,12 +483,12 @@
         return new Uint8Array(commands);
       };
 
+      // AKSI CETAK RINGAN DENGEN CHUNK KECIL & DELAY SUPAYA TIDAK MACET
       const printReceiptThermal = async (tx = currentTransaction) => {
         if (!tx) return;
 
         let activeDev = btDevice || btDeviceRef.current;
 
-        // Coba koneksikan jika sebelumnya disconnect
         if (activeDev && !activeDev.gatt.connected) {
           try {
             await activeDev.gatt.connect();
@@ -610,7 +523,9 @@
 
             if (targetChar) {
               const data = generateEscPosData(tx);
-              const CHUNK_SIZE = 128;
+              
+              // CHUNK KECIL (64 BYTE) & JEDA 20MS SUPAYA BUFFER PRINTER TIDAK OVERFLOW (MACET)
+              const CHUNK_SIZE = 64; 
               for (let i = 0; i < data.length; i += CHUNK_SIZE) {
                 const chunk = data.slice(i, i + CHUNK_SIZE);
                 if (targetChar.properties.writeWithoutResponse) {
@@ -618,16 +533,19 @@
                 } else {
                   await targetChar.writeValue(chunk);
                 }
+                // Delay 20ms per pengiriman chunk
+                await new Promise(r => setTimeout(r, 20));
               }
-              showAlert("Cetak Berhasil", "Struk transaksi telah dikirim ke Printer Bluetooth Thermal 58mm.");
+
+              showAlert("Cetak Berhasil", "Struk transaksi telah selesai dicetak dengan lancar.");
               setIsPrinting(false);
               return;
             }
           }
-          throw new Error("Layanan Bluetooth Printer tidak ditemukan.");
+          throw new Error("Karakteristik bluetooth printer tidak merespon.");
         } catch (e) {
           console.error("Print Thermal Error:", e);
-          showAlert("Gagal Cetak Thermal", "Gagal mengirim data ke Printer Bluetooth. Pastikan printer dalam keadaan hidup dan Bluetooth HP aktif.");
+          showAlert("Gagal Cetak Thermal", "Pengiriman data ke printer terhenti. Pastikan printer dinyalakan & jarak dekat.");
         } finally {
           setIsPrinting(false);
         }
@@ -1064,7 +982,7 @@
                     <span>🖨️ Printer Thermal Bluetooth 58mm</span>
                   </h3>
                   <div className="bg-gray-50 p-2 rounded-lg border text-[11px] space-y-0.5">
-                    <p className="text-gray-600">Status: <strong className={btConnected ? "text-emerald-600" : "text-red-500"}>{btConnected ? "Terhubung (Auto-Reconnect Aktif)" : "Terputus"}</strong></p>
+                    <p className="text-gray-600">Status: <strong className={btConnected ? "text-emerald-600" : "text-red-500"}>{btConnected ? "Terhubung" : "Terputus"}</strong></p>
                     {printerDeviceName && <p className="text-gray-600">Perangkat: <strong>{printerDeviceName}</strong></p>}
                   </div>
 
@@ -1404,7 +1322,7 @@
             </div>
           )}
 
-          {/* MODAL STRUK SUKSES SESUAI DESAIN GAMBAR + LOGO */}
+          {/* MODAL STRUK SUKSES */}
           {showReceiptModal && currentTransaction && (
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
               <div className="bg-white w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto shadow-2xl">
@@ -1417,17 +1335,11 @@
                   <p className="text-[11px] text-gray-500">Kode: {currentTransaction.id}</p>
                 </div>
 
-                {/* PRATINJAU STRUK EXACT DENGAN LOGO GAMBAR */}
+                {/* PRATINJAU STRUK DENGAN BENTUK RINGAN & TULISAN LOKASI */}
                 <div 
                   className="bg-[#FFFFF5] border border-dashed border-gray-300 p-3.5 rounded-xl receipt-font text-xs space-y-1.5 text-gray-800 shadow-inner"
                 >
-                  <div className="text-center pb-2 border-b border-dashed border-gray-400 space-y-1">
-                    <img 
-                      src={STORE_INFO.logo} 
-                      alt="Logo iZZi Corner" 
-                      className="w-16 h-16 mx-auto object-contain rounded-full bg-yellow-300 p-0.5 border border-gray-300"
-                      onError={(e) => e.target.style.display = 'none'}
-                    />
+                  <div className="text-center pb-2 border-b border-dashed border-gray-400 space-y-0.5">
                     <p className="font-bold text-xs tracking-wider">{STORE_INFO.name}</p>
                     <p className="text-[10px] text-gray-700">{STORE_INFO.slogan}</p>
                     <p className="text-[9px] text-gray-600">{STORE_INFO.address}</p>
@@ -1461,7 +1373,7 @@
                       <span>Ongkir:</span>
                       <span>
                         {currentTransaction.deliveryFee > 0 
-                          ? `Rp ${currentTransaction.deliveryFee.toLocaleString('id-ID')}${currentTransaction.unitDetail ? ` (${currentTransaction.unitDetail})` : ''}` 
+                          ? `Rp ${currentTransaction.deliveryFee.toLocaleString('id-ID')}` 
                           : 'GRATIS (Loby/Sec)'}
                       </span>
                     </div>
