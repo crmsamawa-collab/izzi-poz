@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Kasir iZZi Corner</title>
+  
+  <!-- Icon / Logo Aplikasi -->
+  <link rel="icon" type="image/jpeg" href="logo.jpg">
+  <link rel="apple-touch-icon" href="logo.jpg">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              yellow: '#FFDE00',
+              blue: '#0070BB',
+              blueDark: '#005599',
+              red: '#E53E3E'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Inter Font -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  
+  <style>
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background-color: #0f172a; 
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .receipt-font { font-family: 'Courier New', Courier, monospace; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-0 sm:p-3">
+  <div id="root" class="w-full max-w-md h-screen sm:h-[92vh] flex flex-col bg-white overflow-hidden shadow-2xl sm:rounded-2xl relative"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- DATA WARUNG RESMI ---
+    const STORE_INFO = {
+      name: "iZZi Corner",
+      slogan: "Fresh & Delicious",
+      address: "Kantin Menara Samawa No. 3",
+      whatsapp: "0838-7210-1212",
+      logo: "logo.jpg",
+      onlinePlatforms: ["GrabFood", "GoFood", "ShopeeFood"]
+    };
+
+    const INITIAL_CATEGORIES = ["Semua", "Ayam & Nasi", "Seblak", "Minuman", "Cemilan"];
+
+    // Daftar Menu Resmi Terbaru
+    const INITIAL_MENU = [
+      { id: 1, name: "Ayam Bakar", price: 15000, category: "Ayam & Nasi", icon: "🍗", desc: "Ayam bakar bumbu manis gurih" },
+      { id: 2, name: "Ayam Penyet Cabe Ijo", price: 15000, category: "Ayam & Nasi", icon: "🌶️", desc: "Ayam penyet dengan sambal ijo mantap" },
+      { id: 3, name: "Ayam Bumbu Madura", price: 15000, category: "Ayam & Nasi", icon: "🍛", desc: "Ayam goreng rempah bumbu hitam khas Madura" },
+      { id: 4, name: "Pecel Ayam Crispy", price: 16000, category: "Ayam & Nasi", icon: "🍗", desc: "Pecel ayam tepung renyah + sambal khas" },
+      { id: 5, name: "Pecel Ayam", price: 15000, category: "Ayam & Nasi", icon: "🍗", desc: "Pecel ayam goreng gurih + sambal" },
+      { id: 6, name: "Pecel Lele", price: 10000, category: "Ayam & Nasi", icon: "🐟", desc: "Lele goreng renyah + lalapan & sambal" },
+      { id: 7, name: "Nasi Putih", price: 5000, category: "Ayam & Nasi", icon: "🍚", desc: "Nasi putih hangat porsi pas" },
+      { id: 8, name: "Tempe", price: 2000, category: "Ayam & Nasi", icon: "🥟", desc: "Tempe goreng renyah bumbu gurih" },
+      
+      { id: 9, name: "Seblak Original", price: 12000, category: "Seblak", icon: "🍲", desc: "Kerupuk, telur, bakso, sosis, makaroni" },
+      { id: 10, name: "Seblak Mie", price: 14000, category: "Seblak", icon: "🍜", desc: "Seblak kuah pedas segar dengan mie" },
+      { id: 11, name: "Seblak Ceker", price: 15000, category: "Seblak", icon: "🔥", desc: "Seblak pedas dengan topping ceker empuk" },
+      { id: 12, name: "Seblak Komplit", price: 17000, category: "Seblak", icon: "🥘", desc: "Seblak komplit ceker, dumpling, & kwetiau" },
+      { id: 13, name: "Seblak Mie Goreng", price: 14000, category: "Seblak", icon: "🍝", desc: "Mie goreng olahan bumbu seblak khas" },
+      { id: 14, name: "Seblak Kwetiau Goreng", price: 14000, category: "Seblak", icon: "🍜", desc: "Kwetiau goreng bumbu seblak wangi" },
+      
+      { id: 15, name: "Pop Ice Blend aneka varian", price: 5000, category: "Minuman", icon: "🧋", desc: "Segar dingin es blender Pop Ice" },
+      { id: 16, name: "Varian Ice Blend only", price: 5000, category: "Minuman", icon: "🥤", desc: "Aneka varian rasa Ice Blend pilihan" },
+      { id: 17, name: "Es Marimas / Jasjus", price: 4000, category: "Minuman", icon: "🍹", desc: "Minuman serbuk buah segar dingin" },
+      { id: 18, name: "Es Teh Manis Jumbo", price: 4000, category: "Minuman", icon: "🥤", desc: "Es teh manis porsi jumbo mantap" },
+      { id: 19, name: "Nescafe Iceroast 18oz", price: 5000, category: "Minuman", icon: "☕", desc: "Nescafe dingin segar cup 18oz" },
+      
+      { id: 20, name: "Martabak Telur", price: 6000, category: "Cemilan", icon: "🍳", desc: "Martabak telur hangat renyah" },
+      { id: 21, name: "Peyek Kacang / Rebon", price: 7000, category: "Cemilan", icon: "🍘", desc: "Peyek garing gurih aneka rasa" }
+    ];
+
+    function App() {
+      // States Utama
+      const [activeTab, setActiveTab] = useState('kasir'); // 'kasir' | 'riwayat' | 'pengaturan'
+      const [cart, setCart] = useState([]);
+      const [selectedCategory, setSelectedCategory] = useState("Semua");
+      const [searchTerm, setSearchTerm] = useState("");
+
+      // Custom Alert Modal State (Pengganti alert() & confirm())
+      const [customAlert, setCustomAlert] = useState({
+        show: false,
+        title: "",
+        message: "",
+        type: "info", // "info" | "confirm"
+        onConfirm: null
+      });
+
+      const showAlert = (title, message) => {
+        setCustomAlert({ show: true, title, message, type: "info", onConfirm: null });
+      };
+
+      const showConfirm = (title, message, onConfirm) => {
+        setCustomAlert({ show: true, title, message, type: "confirm", onConfirm });
+      };
+
+      const closeAlert = () => {
+        setCustomAlert(prev => ({ ...prev, show: false }));
+      };
+
+      // Menu List dengan LocalStorage
+      const [menuList, setMenuList] = useState(() => {
+        try {
+          const savedMenu = localStorage.getItem('izzi_pos_menu_v3');
+          return savedMenu ? JSON.parse(savedMenu) : INITIAL_MENU;
+        } catch(e) {
+          return INITIAL_MENU;
+        }
+      });
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('izzi_pos_menu_v3', JSON.stringify(menuList));
+        } catch(e){}
+      }, [menuList]);
+
+      // Delivery Option State ('loby' = Rp 0, 'unit' = Rp 2000)
+      const [deliveryOption, setDeliveryOption] = useState('loby');
+      const deliveryFee = deliveryOption === 'unit' ? 2000 : 0;
+
+      // Custom Item Modal State
+      const [showAddMenuModal, setShowAddMenuModal] = useState(false);
+      const [customName, setCustomName] = useState("");
+      const [customPrice, setCustomPrice] = useState("");
+      const [customQty, setCustomQty] = useState("1");
+      const [customCategory, setCustomCategory] = useState("Ayam & Nasi");
+      const [saveToCatalog, setSaveToCatalog] = useState(true);
+
+      // Payment Modal States
+      const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [paymentMethod, setPaymentMethod] = useState("Tunai"); 
+      const [cashPaid, setCashPaid] = useState("");
+      
+      // Thermal Bluetooth Printer States
+      const [autoPrintEnabled, setAutoPrintEnabled] = useState(false);
+      const [showReceiptModal, setShowReceiptModal] = useState(false);
+      const [currentTransaction, setCurrentTransaction] = useState(null);
+      const [btDevice, setBtDevice] = useState(null);
+      const [btConnected, setBtConnected] = useState(false);
+      const [btStatusText, setBtStatusText] = useState("Bluetooth Terputus");
+      const [printerDeviceName, setPrinterDeviceName] = useState("");
+
+      // History Transaksi
+      const [history, setHistory] = useState(() => {
+        try {
+          const saved = localStorage.getItem('izzi_pos_history');
+          return saved ? JSON.parse(saved) : [];
+        } catch(e) {
+          return [];
+        }
+      });
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('izzi_pos_history', JSON.stringify(history));
+        } catch(e){}
+      }, [history]);
+
+      const filteredMenu = useMemo(() => {
+        return menuList.filter(item => {
+          const matchCat = selectedCategory === "Semua" || item.category === selectedCategory;
+          const matchSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+          return matchCat && matchSearch;
+        });
+      }, [menuList, selectedCategory, searchTerm]);
+
+      const itemsSubtotal = useMemo(() => cart.reduce((acc, curr) => acc + (curr.price * curr.qty), 0), [cart]);
+      const cartTotal = useMemo(() => itemsSubtotal + deliveryFee, [itemsSubtotal, deliveryFee]);
+      const cartTotalQty = useMemo(() => cart.reduce((acc, curr) => acc + curr.qty, 0), [cart]);
+
+      // Cart Operations
+      const addToCart = (product) => {
+        setCart(prev => {
+          const existing = prev.find(item => item.id === product.id);
+          if (existing) {
+            return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+          } else {
+            return [...prev, { ...product, qty: 1, note: "" }];
+          }
+        });
+      };
+
+      // Tambah Menu Custom Baru
+      const handleAddCustomMenu = (e) => {
+        e.preventDefault();
+        if (!customName.trim() || !customPrice || isNaN(customPrice) || parseFloat(customPrice) <= 0) {
+          showAlert("Input Tidak Valid", "Mohon masukkan nama menu dan harga angka yang sesuai.");
+          return;
+        }
+
+        const priceNum = parseFloat(customPrice);
+        const qtyNum = parseInt(customQty) || 1;
+        const newId = Date.now();
+
+        const newItem = {
+          id: newId,
+          name: customName.trim(),
+          price: priceNum,
+          category: customCategory,
+          icon: "⭐",
+          desc: "Menu manual / khusus"
+        };
+
+        if (saveToCatalog) {
+          setMenuList(prev => [newItem, ...prev]);
+        }
+
+        setCart(prev => {
+          const existing = prev.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+          if (existing) {
+            return prev.map(i => i.name.toLowerCase() === newItem.name.toLowerCase() ? { ...i, qty: i.qty + qtyNum } : i);
+          }
+          return [...prev, { ...newItem, qty: qtyNum, note: "" }];
+        });
+
+        setCustomName("");
+        setCustomPrice("");
+        setCustomQty("1");
+        setShowAddMenuModal(false);
+      };
+
+      const resetCatalogMenu = () => {
+        showConfirm(
+          "Reset Daftar Menu?", 
+          "Semua menu yang Anda tambahkan manual akan terhapus dan kembali ke menu bawaan resmi iZZi Corner.", 
+          () => setMenuList(INITIAL_MENU)
+        );
+      };
+
+      const updateQty = (id, delta) => {
+        setCart(prev => {
+          return prev.map(item => {
+            if (item.id === id) {
+              const newQty = item.qty + delta;
+              return newQty > 0 ? { ...item, qty: newQty } : null;
+            }
+            return item;
+          }).filter(Boolean);
+        });
+      };
+
+      const updateNote = (id, note) => {
+        setCart(prev => prev.map(item => item.id === id ? { ...item, note } : item));
+      };
+
+      const clearCart = () => setCart([]);
+
+      // Flow Pembayaran
+      const handleOpenPayment = () => {
+        if (cart.length === 0) return;
+        setCashPaid(cartTotal.toString());
+        setShowPaymentModal(true);
+      };
+
+      const processPayment = () => {
+        const numericPaid = parseFloat(cashPaid) || cartTotal;
+        const change = numericPaid - cartTotal;
+
+        if (paymentMethod === "Tunai" && change < 0) {
+          showAlert("Uang Kurang", "Uang tunai yang dimasukkan masih kurang dari total tagihan.");
+          return;
+        }
+
+        const newTx = {
+          id: "IZZI-" + Date.now().toString().slice(-6),
+          date: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+          items: [...cart],
+          itemsSubtotal: itemsSubtotal,
+          deliveryFee: deliveryFee,
+          deliveryOption: deliveryOption,
+          total: cartTotal,
+          paymentMethod: paymentMethod,
+          paid: paymentMethod === "Tunai" ? numericPaid : cartTotal,
+          change: paymentMethod === "Tunai" ? Math.max(0, change) : 0,
+        };
+
+        setHistory(prev => [newTx, ...prev]);
+        setCurrentTransaction(newTx);
+        setShowPaymentModal(false);
+        setCart([]);
+
+        // Jika auto-print aktif & BT terhubung
+        if (autoPrintEnabled && btConnected) {
+          printReceiptThermal(newTx);
+        }
+        
+        setShowReceiptModal(true);
+      };
+
+      const connectBluetoothPrinter = async () => {
+        try {
+          if (!navigator.bluetooth) {
+            showAlert("Tidak Didukung", "Browser Anda belum mendukung Web Bluetooth. Gunakan browser Google Chrome di HP Android.");
+            return;
+          }
+          
+          setBtStatusText("Mencari printer...");
+          const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [
+              '000018f0-0000-1000-8000-00805f9b34fb',
+              '00001101-0000-1000-8000-00805f9b34fb',
+              'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+            ]
+          });
+
+          setPrinterDeviceName(device.name || "Printer 58mm");
+          setBtDevice(device);
+          setBtConnected(true);
+          setBtStatusText(`Terhubung: ${device.name || "Printer 58mm"}`);
+          showAlert("Berhasil Terhubung", `Terhubung dengan printer: ${device.name || "Bluetooth Printer"}`);
+        } catch (error) {
+          console.error("BT Error:", error);
+          setBtStatusText("Sambungan dibatalkan");
+          setBtConnected(false);
+        }
+      };
+
+      const format58mmLine = (leftStr, rightStr) => {
+        const MAX_CHARS = 32;
+        const left = leftStr.substring(0, MAX_CHARS - rightStr.length - 1);
+        const spaces = MAX_CHARS - (left.length + rightStr.length);
+        return left + " ".repeat(Math.max(1, spaces)) + rightStr;
+      };
+
+      const generateEscPosData = (tx) => {
+        let commands = [];
+        const encoder = new TextEncoder();
+
+        const addText = (str) => commands.push(...encoder.encode(str + "\n"));
+        const addCmd = (cmdArr) => commands.push(...cmdArr);
+
+        // Init Printer
+        addCmd([0x1B, 0x40]); 
+        
+        // Header Center
+        addCmd([0x1B, 0x61, 0x01]);
+        addCmd([0x1B, 0x45, 0x01]); 
+        addText(STORE_INFO.name.toUpperCase());
+        addCmd([0x1B, 0x45, 0x00]); 
+        addText(STORE_INFO.slogan);
+        addText(STORE_INFO.address);
+        addText("WA: " + STORE_INFO.whatsapp);
+        addText("--------------------------------");
+
+        // Transaction Details
+        addCmd([0x1B, 0x61, 0x00]);
+        addText(`No : ${tx.id}`);
+        addText(`Tgl: ${tx.date}`);
+        addText(`Bayar: ${tx.paymentMethod}`);
+        addText("--------------------------------");
+
+        // Item List
+        tx.items.forEach(item => {
+          addText(item.name);
+          if (item.note) addText(`  * ${item.note}`);
+          const qtyPrice = `${item.qty} x ${item.price.toLocaleString('id-ID')}`;
+          const totalItem = (item.qty * item.price).toLocaleString('id-ID');
+          addText(format58mmLine(` ${qtyPrice}`, totalItem));
+        });
+
+        addText("--------------------------------");
+        if (tx.deliveryFee > 0) {
+          addText(format58mmLine("Subtotal Pesanan:", `Rp ${(tx.itemsSubtotal || tx.total - tx.deliveryFee).toLocaleString('id-ID')}`));
+          addText(format58mmLine("Ongkir Delivery Unit:", `Rp ${tx.deliveryFee.toLocaleString('id-ID')}`));
+        } else {
+          addText(format58mmLine("Ongkir (Loby/Sec):", "GRATIS"));
+        }
+        addText(format58mmLine("TOTAL TAGIHAN:", `Rp ${tx.total.toLocaleString('id-ID')}`));
+        
+        if (tx.paymentMethod === "Tunai") {
+          addText(format58mmLine("Uang Tunai:", `Rp ${tx.paid.toLocaleString('id-ID')}`));
+          addText(format58mmLine("Kembalian:", `Rp ${tx.change.toLocaleString('id-ID')}`));
+        }
+        addText("--------------------------------");
+
+        // Footer Center
+        addCmd([0x1B, 0x61, 0x01]);
+        addText("Terima Kasih Atas Kunjungannya!");
+        addText("Fresh & Delicious Everyday");
+        addText("Delivery: WA / Samawa No. 3");
+        addText("Available on: Grab/Go/ShopeeFood");
+        addText("\n\n\n");
+
+        return new Uint8Array(commands);
+      };
+
+      const printReceiptThermal = async (tx = currentTransaction) => {
+        if (!tx) return;
+
+        if (btDevice && btConnected) {
+          try {
+            const server = await btDevice.gatt.connect();
+            const services = await server.getPrimaryServices();
+            if (services.length > 0) {
+              const characteristics = await services[0].getCharacteristics();
+              if (characteristics.length > 0) {
+                const char = characteristics[0];
+                const data = generateEscPosData(tx);
+                
+                const CHUNK_SIZE = 512;
+                for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+                  const chunk = data.slice(i, i + CHUNK_SIZE);
+                  await char.writeValue(chunk);
+                }
+                showAlert("Berhasil Cetak", "Struk telah dikirim ke printer Bluetooth Thermal 58mm.");
+                return;
+              }
+            }
+          } catch (e) {
+            console.error("Print Error:", e);
+            showAlert("Gagal Cetak BT", "Koneksi ke Bluetooth terputus. Beralih ke dialog cetak sistem.");
+          }
+        }
+
+        window.print();
+      };
+
+      // Kirim Struk WA
+      const sendWhatsAppReceipt = (tx) => {
+        if (!tx) return;
+        let text = `*-- STRUK PEMBAYARAN ${STORE_INFO.name.toUpperCase()} --*\n`;
+        text += `${STORE_INFO.address}\n`;
+        text += `WA: ${STORE_INFO.whatsapp}\n`;
+        text += `-----------------------------------\n`;
+        text += `No. Transaksi: ${tx.id}\n`;
+        text += `Tanggal: ${tx.date}\n`;
+        text += `Metode: ${tx.paymentMethod}\n`;
+        text += `-----------------------------------\n`;
+        tx.items.forEach(i => {
+          text += `• ${i.name} (${i.qty}x)\n  Rp ${(i.qty * i.price).toLocaleString('id-ID')}\n`;
+          if (i.note) text += `  Catatan: ${i.note}\n`;
+        });
+        text += `-----------------------------------\n`;
+        if (tx.deliveryFee > 0) {
+          text += `Subtotal: Rp ${(tx.itemsSubtotal || tx.total - tx.deliveryFee).toLocaleString('id-ID')}\n`;
+          text += `Ongkir Unit: Rp ${tx.deliveryFee.toLocaleString('id-ID')}\n`;
+        } else {
+          text += `Ongkir: GRATIS (Loby/Security)\n`;
+        }
+        text += `*TOTAL: Rp ${tx.total.toLocaleString('id-ID')}*\n`;
+        if (tx.paymentMethod === "Tunai") {
+          text += `Bayar: Rp ${tx.paid.toLocaleString('id-ID')}\n`;
+          text += `Kembali: Rp ${tx.change.toLocaleString('id-ID')}\n`;
+        }
+        text += `-----------------------------------\n`;
+        text += `Terima Kasih! ~ ${STORE_INFO.slogan}`;
+
+        const encoded = encodeURIComponent(text);
+        window.open(`https://wa.me/?text=${encoded}`, '_blank');
+      };
+
+      return (
+        <div className="flex flex-col h-full w-full bg-white relative">
+          
+          {/* HEADER BAR */}
+          <header className="bg-brand-yellow px-4 py-2.5 border-b border-yellow-400 flex items-center justify-between shadow-sm shrink-0">
+            <div className="flex items-center space-x-2">
+              <img 
+                src={STORE_INFO.logo} 
+                alt="iZZi Corner Logo" 
+                className="w-10 h-10 rounded-xl object-cover shadow-sm bg-yellow-300 border border-yellow-500/50"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.style.display = 'none';
+                  if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+              <div className="w-10 h-10 bg-brand-blue rounded-xl hidden items-center justify-center text-white font-black text-base shadow">
+                iZ
+              </div>
+              <div>
+                <h1 className="font-extrabold text-brand-blue text-base leading-tight">{STORE_INFO.name}</h1>
+                <p className="text-[10px] font-semibold text-gray-700">{STORE_INFO.slogan}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <button 
+                onClick={() => setShowAddMenuModal(true)}
+                className="bg-brand-blue text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-brand-blueDark active:scale-95 transition"
+              >
+                + Menu Manual
+              </button>
+
+              <button 
+                onClick={connectBluetoothPrinter}
+                className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 transition shadow-sm ${
+                  btConnected 
+                    ? 'bg-emerald-600 text-white' 
+                    : 'bg-white text-gray-700 border border-yellow-300'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${btConnected ? 'bg-white animate-pulse' : 'bg-red-500'}`}></span>
+                <span className="text-[10px]">{btConnected ? "Printer" : "BT Printer"}</span>
+              </button>
+            </div>
+          </header>
+
+          {/* CONTENT MAIN */}
+          <main className="flex-1 overflow-y-auto pb-20 bg-gray-50 no-scrollbar">
+            
+            {/* TAB KASIR */}
+            {activeTab === 'kasir' && (
+              <div className="p-3 space-y-3">
+                
+                {/* Search Bar & Category Filter */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="Cari ayam, seblak, es..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-blue shadow-sm"
+                      />
+                      <svg className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                      </svg>
+                    </div>
+
+                    <button
+                      onClick={() => setShowAddMenuModal(true)}
+                      className="bg-yellow-400 border border-yellow-500 text-gray-800 text-xs font-bold px-3 py-2 rounded-xl shadow-sm hover:bg-yellow-500 transition"
+                    >
+                      + Custom
+                    </button>
+                  </div>
+
+                  {/* Kategori Pills */}
+                  <div className="flex space-x-1.5 overflow-x-auto no-scrollbar py-1">
+                    {INITIAL_CATEGORIES.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                          selectedCategory === cat 
+                            ? 'bg-brand-blue text-white shadow-md' 
+                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Banner Info Pengantaran */}
+                <div className="bg-yellow-100 border border-yellow-300 rounded-xl p-2.5 flex items-center justify-between text-[11px] text-yellow-900 shadow-sm">
+                  <span>🛵 <strong>Delivery Unit:</strong> +2k/order | <strong>Loby:</strong> Gratis</span>
+                </div>
+
+                {/* Grid Menu Catalog */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {filteredMenu.map(item => {
+                    const inCart = cart.find(c => c.id === item.id);
+                    return (
+                      <div 
+                        key={item.id}
+                        onClick={() => addToCart(item)}
+                        className={`bg-white p-2.5 rounded-xl border transition cursor-pointer flex flex-col justify-between relative shadow-sm hover:shadow-md active:scale-95 ${
+                          inCart ? 'border-brand-blue ring-2 ring-blue-100 bg-blue-50/20' : 'border-gray-100'
+                        }`}
+                      >
+                        {inCart && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-brand-red text-white text-[11px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow">
+                            {inCart.qty}
+                          </span>
+                        )}
+                        <div>
+                          <div className="text-xl mb-1">{item.icon}</div>
+                          <h3 className="font-bold text-gray-800 text-xs leading-snug">{item.name}</h3>
+                          <p className="text-[10px] text-gray-500 line-clamp-1 mt-0.5">{item.desc}</p>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="font-extrabold text-brand-blue text-xs">
+                            Rp {item.price.toLocaleString('id-ID')}
+                          </span>
+                          <button className="w-5 h-5 bg-yellow-400 rounded-md flex items-center justify-center font-bold text-gray-800 text-xs hover:bg-yellow-500">
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* CART DRAWER SECTION */}
+                {cart.length > 0 && (
+                  <div className="mt-4 bg-white rounded-2xl p-3 border border-gray-200 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-gray-800 text-xs">Keranjang Pesanan</span>
+                        <span className="bg-brand-yellow text-[10px] font-bold px-2 py-0.5 rounded-full text-gray-800">
+                          {cartTotalQty} item
+                        </span>
+                      </div>
+                      <button onClick={clearCart} className="text-[11px] text-red-500 hover:underline font-semibold">
+                        Bersihkan
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar divide-y divide-gray-100">
+                      {cart.map(item => (
+                        <div key={item.id} className="pt-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 pr-2">
+                              <h4 className="font-semibold text-xs text-gray-800">{item.name}</h4>
+                              <p className="text-[10px] text-gray-500">
+                                @ Rp {item.price.toLocaleString('id-ID')} = <span className="font-bold text-gray-700">Rp {(item.qty * item.price).toLocaleString('id-ID')}</span>
+                              </p>
+                            </div>
+                            
+                            <div className="flex items-center space-x-1.5 bg-gray-100 rounded-lg p-1">
+                              <button onClick={() => updateQty(item.id, -1)} className="w-5 h-5 bg-white rounded text-gray-700 font-bold text-xs shadow-sm">-</button>
+                              <span className="text-xs font-bold px-1">{item.qty}</span>
+                              <button onClick={() => updateQty(item.id, 1)} className="w-5 h-5 bg-white rounded text-gray-700 font-bold text-xs shadow-sm">+</button>
+                            </div>
+                          </div>
+
+                          <input
+                            type="text"
+                            placeholder="Catatan (misal: pedas sedang, es dikit)"
+                            value={item.note || ""}
+                            onChange={(e) => updateNote(item.id, e.target.value)}
+                            className="mt-1 w-full bg-gray-50 border border-gray-200 text-[10px] rounded px-2 py-1 text-gray-700 focus:bg-white focus:outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* PILIHAN DELIVERY ONGKIR */}
+                    <div className="pt-2 border-t space-y-1.5">
+                      <label className="text-[11px] font-bold text-gray-700 block">Lokasi Pengantaran:</label>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryOption('loby')}
+                          className={`p-2 rounded-xl border text-left font-semibold text-[11px] transition ${
+                            deliveryOption === 'loby'
+                              ? 'bg-blue-50 border-brand-blue text-brand-blue ring-1 ring-blue-300'
+                              : 'bg-gray-50 border-gray-200 text-gray-600'
+                          }`}
+                        >
+                          <div className="font-bold">🏢 Loby / Security</div>
+                          <div className="text-[10px] opacity-80">Gratis Ongkir (Rp 0)</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryOption('unit')}
+                          className={`p-2 rounded-xl border text-left font-semibold text-[11px] transition ${
+                            deliveryOption === 'unit'
+                              ? 'bg-blue-50 border-brand-blue text-brand-blue ring-1 ring-blue-300'
+                              : 'bg-gray-50 border-gray-200 text-gray-600'
+                          }`}
+                        >
+                          <div className="font-bold">🛵 Delivery ke Unit</div>
+                          <div className="text-[10px] opacity-80">+Rp 2.000 / Order</div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Ringkasan Subtotal */}
+                    <div className="pt-2 border-t space-y-1">
+                      <div className="flex justify-between items-center text-xs text-gray-500">
+                        <span>Subtotal Item:</span>
+                        <span>Rp {itemsSubtotal.toLocaleString('id-ID')}</span>
+                      </div>
+                      {deliveryFee > 0 && (
+                        <div className="flex justify-between items-center text-xs text-emerald-600 font-semibold">
+                          <span>Ongkir Delivery Unit:</span>
+                          <span>+ Rp {deliveryFee.toLocaleString('id-ID')}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-1 border-t">
+                        <span className="text-xs text-gray-700 font-bold">Total Tagihan:</span>
+                        <span className="text-lg font-black text-brand-blue">
+                          Rp {cartTotal.toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleOpenPayment}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl shadow-md flex items-center justify-center space-x-2 active:scale-98 transition text-xs"
+                    >
+                      <span>Lanjut Pembayaran (Rp {cartTotal.toLocaleString('id-ID')})</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB RIWAYAT */}
+            {activeTab === 'riwayat' && (
+              <div className="p-3 space-y-3">
+                <h2 className="font-bold text-gray-800 text-sm">Riwayat Transaksi iZZi Corner</h2>
+                {history.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <p className="text-3xl mb-2">📄</p>
+                    <p className="text-xs font-medium">Belum ada transaksi disimpan.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {history.map(tx => (
+                      <div key={tx.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                        <div className="flex justify-between items-start border-b pb-2">
+                          <div>
+                            <span className="font-bold text-gray-800 text-xs">{tx.id}</span>
+                            <p className="text-[10px] text-gray-500">{tx.date}</p>
+                          </div>
+                          <span className="bg-blue-100 text-brand-blue text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            {tx.paymentMethod}
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-gray-600 space-y-0.5">
+                          {tx.items.map((it, idx) => (
+                            <div key={idx} className="flex justify-between text-[11px]">
+                              <span>{it.qty}x {it.name}</span>
+                              <span className="font-medium">Rp {(it.qty * it.price).toLocaleString('id-ID')}</span>
+                            </div>
+                          ))}
+                          {tx.deliveryFee > 0 && (
+                            <div className="flex justify-between text-[11px] text-emerald-600 font-medium">
+                              <span>🛵 Ongkir Delivery Unit</span>
+                              <span>Rp {tx.deliveryFee.toLocaleString('id-ID')}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t flex justify-between items-center">
+                          <span className="font-black text-brand-blue text-xs">
+                            Total: Rp {tx.total.toLocaleString('id-ID')}
+                          </span>
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => sendWhatsAppReceipt(tx)}
+                              className="px-2 py-1 bg-emerald-100 text-emerald-700 font-bold text-[10px] rounded hover:bg-emerald-200"
+                            >
+                              WA
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCurrentTransaction(tx);
+                                setShowReceiptModal(true);
+                              }}
+                              className="px-2.5 py-1 bg-yellow-400 text-gray-800 font-bold text-[10px] rounded hover:bg-yellow-500"
+                            >
+                              Struk
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB PENGATURAN */}
+            {activeTab === 'pengaturan' && (
+              <div className="p-3 space-y-3">
+                <h2 className="font-bold text-gray-800 text-sm">Pengaturan Aplikasi Kasir</h2>
+
+                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                  <h3 className="font-bold text-xs text-gray-800 flex items-center space-x-2">
+                    <span>🖨️ Printer Thermal 58mm (Bluetooth)</span>
+                  </h3>
+                  <div className="bg-gray-50 p-2 rounded-lg border text-[11px] space-y-0.5">
+                    <p className="text-gray-600">Status: <strong className={btConnected ? "text-emerald-600" : "text-red-500"}>{btStatusText}</strong></p>
+                    {printerDeviceName && <p className="text-gray-600">Perangkat: <strong>{printerDeviceName}</strong></p>}
+                  </div>
+
+                  <button
+                    onClick={connectBluetoothPrinter}
+                    className="w-full bg-brand-blue hover:bg-brand-blueDark text-white font-bold py-2 rounded-xl text-xs shadow transition"
+                  >
+                    {btConnected ? "Sambung Ulang Printer" : "Cari Printer Bluetooth"}
+                  </button>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                  <h3 className="font-bold text-xs text-gray-800">Cetak Otomatis Struk</h3>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">Cetak langsung saat bayar selesai</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={autoPrintEnabled} 
+                        onChange={(e) => setAutoPrintEnabled(e.target.checked)} 
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                  <h3 className="font-bold text-xs text-gray-800">Manajemen Katalog Menu</h3>
+                  <p className="text-[11px] text-gray-500">Jumlah menu terdaftar: {menuList.length} menu</p>
+                  <button
+                    onClick={resetCatalogMenu}
+                    className="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-bold py-2 rounded-xl text-xs transition"
+                  >
+                    Reset Menu ke Bawaan Resmi
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* MODAL CUSTOM ALERT / CONFIRM (Mencegah error alert browser) */}
+          {customAlert.show && (
+            <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+              <div className="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl animate-fade-in">
+                <h3 className="font-bold text-gray-800 text-sm border-b pb-1.5">{customAlert.title}</h3>
+                <p className="text-xs text-gray-600 leading-relaxed">{customAlert.message}</p>
+                <div className="flex justify-end space-x-2 pt-2">
+                  {customAlert.type === "confirm" && (
+                    <button
+                      onClick={closeAlert}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold"
+                    >
+                      Batal
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (customAlert.onConfirm) customAlert.onConfirm();
+                      closeAlert();
+                    }}
+                    className="px-4 py-1.5 bg-brand-blue hover:bg-brand-blueDark text-white rounded-lg text-xs font-bold"
+                  >
+                    {customAlert.type === "confirm" ? "Ya, Lanjutkan" : "OK"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL TAMBAH MENU MANUAL */}
+          {showAddMenuModal && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <div className="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl">
+                <div className="flex justify-between items-center border-b pb-2">
+                  <h3 className="font-bold text-gray-800 text-sm">Tambah Menu Manual</h3>
+                  <button onClick={() => setShowAddMenuModal(false)} className="text-gray-400 font-bold text-lg">✕</button>
+                </div>
+
+                <form onSubmit={handleAddCustomMenu} className="space-y-2.5 text-xs">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Nama Menu / Item:</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Es Teh Manis Spesial"
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Harga (Rp):</label>
+                      <input
+                        type="number"
+                        required
+                        placeholder="10000"
+                        value={customPrice}
+                        onChange={(e) => setCustomPrice(e.target.value)}
+                        className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Banyaknya (Qty):</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={customQty}
+                        onChange={(e) => setCustomQty(e.target.value)}
+                        className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-brand-blue focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Kategori:</label>
+                    <select
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:bg-white focus:outline-none"
+                    >
+                      <option value="Ayam & Nasi">Ayam & Nasi</option>
+                      <option value="Seblak">Seblak</option>
+                      <option value="Minuman">Minuman</option>
+                      <option value="Cemilan">Cemilan</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center space-x-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="saveCatalog"
+                      checked={saveToCatalog}
+                      onChange={(e) => setSaveToCatalog(e.target.checked)}
+                      className="rounded border-gray-300 text-brand-blue"
+                    />
+                    <label htmlFor="saveCatalog" className="text-[11px] text-gray-600">
+                      Simpan juga ke daftar menu kasir
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-brand-blue hover:bg-brand-blueDark text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition"
+                  >
+                    + Masukkan ke Pesanan
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL PEMBAYARAN */}
+          {showPaymentModal && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center sm:items-center p-0 sm:p-4">
+              <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-2">
+                  <h3 className="font-bold text-gray-800 text-sm">Pembayaran iZZi Corner</h3>
+                  <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 font-bold">✕</button>
+                </div>
+
+                <div className="bg-yellow-50 p-2.5 rounded-xl border border-yellow-200 text-center">
+                  <p className="text-[11px] text-gray-600">Total Tagihan Pesanan</p>
+                  <p className="text-xl font-black text-brand-blue">Rp {cartTotal.toLocaleString('id-ID')}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-700">Metode Pembayaran:</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {["Tunai", "QRIS", "GrabFood", "GoFood", "ShopeeFood"].map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setPaymentMethod(m)}
+                        className={`py-1.5 px-1 text-xs font-bold rounded-lg border transition ${
+                          paymentMethod === m 
+                            ? 'bg-brand-blue text-white border-brand-blue' 
+                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {paymentMethod === "Tunai" && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-700">Uang Diterima (Rp):</label>
+                    <input
+                      type="number"
+                      value={cashPaid}
+                      onChange={(e) => setCashPaid(e.target.value)}
+                      className="w-full p-2 bg-gray-50 rounded-xl border border-gray-300 font-bold text-base text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                    />
+
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {[cartTotal, 10000, 20000, 50000, 100000].map(amt => (
+                        <button
+                          key={amt}
+                          onClick={() => setCashPaid(amt.toString())}
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 border text-gray-800 font-bold text-xs rounded-lg"
+                        >
+                          {amt === cartTotal ? "Uang Pas" : `Rp ${(amt/1000)}rb`}
+                        </button>
+                      ))}
+                    </div>
+
+                    {parseFloat(cashPaid) >= cartTotal && (
+                      <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-xl flex justify-between items-center text-xs">
+                        <span className="font-bold text-emerald-800">Kembalian:</span>
+                        <span className="font-black text-emerald-700 text-sm">
+                          Rp {(parseFloat(cashPaid) - cartTotal).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={processPayment}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl shadow-lg transition text-xs"
+                >
+                  Selesaikan Transaksi
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL STRUK SUKSES & OPSIONAL CETAK FLEKSIBEL */}
+          {showReceiptModal && currentTransaction && (
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
+              <div className="bg-white w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto shadow-2xl">
+                
+                <div className="text-center space-y-0.5">
+                  <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto font-black text-xl">
+                    ✓
+                  </div>
+                  <h3 className="font-extrabold text-gray-800 text-base">Pembayaran Berhasil!</h3>
+                  <p className="text-[11px] text-gray-500">Kode: {currentTransaction.id}</p>
+                </div>
+
+                {/* PRATINJAU STRUK 58mm */}
+                <div 
+                  className="bg-yellow-50/50 border border-dashed border-gray-300 p-3 rounded-xl receipt-font text-xs space-y-1.5 text-gray-800 shadow-inner"
+                >
+                  <div className="text-center border-b border-dashed border-gray-400 pb-2">
+                    <img 
+                      src={STORE_INFO.logo} 
+                      alt="Logo" 
+                      className="w-14 h-14 mx-auto mb-1.5 object-cover rounded-full border border-gray-300" 
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                    <p className="font-bold text-xs">{STORE_INFO.name.toUpperCase()}</p>
+                    <p className="text-[10px]">{STORE_INFO.slogan}</p>
+                    <p className="text-[9px] text-gray-600">{STORE_INFO.address}</p>
+                    <p className="text-[9px] text-gray-600">WA: {STORE_INFO.whatsapp}</p>
+                  </div>
+
+                  <div className="text-[10px] border-b border-dashed border-gray-400 pb-1">
+                    <p>No : {currentTransaction.id}</p>
+                    <p>Tgl: {currentTransaction.date}</p>
+                    <p>Bayar: {currentTransaction.paymentMethod}</p>
+                  </div>
+
+                  <div className="space-y-1 text-[10px] border-b border-dashed border-gray-400 pb-2">
+                    {currentTransaction.items.map((it, idx) => (
+                      <div key={idx}>
+                        <p className="font-bold">{it.name}</p>
+                        {it.note && <p className="text-[9px] text-gray-500 pl-2">* {it.note}</p>}
+                        <div className="flex justify-between text-[9px]">
+                          <span>{it.qty} x {it.price.toLocaleString('id-ID')}</span>
+                          <span>Rp {(it.qty * it.price).toLocaleString('id-ID')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-0.5 text-[10px] font-bold border-b border-dashed border-gray-400 pb-2">
+                    {currentTransaction.deliveryFee > 0 ? (
+                      <>
+                        <div className="flex justify-between text-[9px] font-normal">
+                          <span>Subtotal Item:</span>
+                          <span>Rp {(currentTransaction.itemsSubtotal || currentTransaction.total - currentTransaction.deliveryFee).toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between text-[9px] text-emerald-700">
+                          <span>Ongkir Delivery Unit:</span>
+                          <span>Rp {currentTransaction.deliveryFee.toLocaleString('id-ID')}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-[9px] font-normal text-gray-600">
+                        <span>Ongkir:</span>
+                        <span>GRATIS (Loby/Sec)</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between font-extrabold pt-0.5">
+                      <span>Total:</span>
+                      <span>Rp {currentTransaction.total.toLocaleString('id-ID')}</span>
+                    </div>
+
+                    {currentTransaction.paymentMethod === "Tunai" && (
+                      <>
+                        <div className="flex justify-between text-[9px] font-normal">
+                          <span>Tunai:</span>
+                          <span>Rp {currentTransaction.paid.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between text-[9px] font-normal">
+                          <span>Kembali:</span>
+                          <span>Rp {currentTransaction.change.toLocaleString('id-ID')}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="text-center text-[9px] text-gray-600 pt-0.5">
+                    <p className="font-bold">Terima Kasih!</p>
+                    <p>Fresh & Delicious Everyday</p>
+                  </div>
+                </div>
+
+                {/* PILIHAN OPSIONAL CETAK FLEKSIBEL */}
+                <div className="space-y-1.5 pt-1">
+                  <button
+                    onClick={() => printReceiptThermal(currentTransaction)}
+                    className="w-full bg-brand-blue hover:bg-brand-blueDark text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-2 shadow transition"
+                  >
+                    <span>🖨️ Cetak Struk Thermal (58mm)</span>
+                  </button>
+
+                  <button
+                    onClick={() => sendWhatsAppReceipt(currentTransaction)}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-2 shadow transition"
+                  >
+                    <span>💬 Kirim Struk via WhatsApp</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowReceiptModal(false)}
+                    className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-xl text-xs transition"
+                  >
+                    ⚡ Transaksi Baru (Selesai Tanpa Cetak)
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* BOTTOM NAVIGATION */}
+          <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 px-1 shadow-lg z-10">
+            <button
+              onClick={() => setActiveTab('kasir')}
+              className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'kasir' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/>
+              </svg>
+              <span className="text-[10px] mt-0.5">Kasir</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('riwayat')}
+              className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'riwayat' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+              </svg>
+              <span className="text-[10px] mt-0.5">Riwayat</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('pengaturan')}
+              className={`flex flex-col items-center flex-1 py-0.5 ${activeTab === 'pengaturan' ? 'text-brand-blue font-bold' : 'text-gray-400'}`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              </svg>
+              <span className="text-[10px] mt-0.5">Pengaturan</span>
+            </button>
+          </nav>
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
